@@ -7,7 +7,7 @@
 from __future__ import absolute_import
 
 import sys
-import interfaces.serial, interfaces.curses
+import interfaces.serial, interfaces.curses, interfaces.urwid
 
 from optparse import OptionParser
 
@@ -20,7 +20,7 @@ def main():
                       action =  "store",
                       dest =    "interface",
                       type =    "choice",
-                      choices = ["serial", "curses"],
+                      choices = ["serial", "curses", "urwid"],
                       default = "serial",
                       help =    "Choices: serial (default) or curses",)
 
@@ -43,6 +43,12 @@ def main():
     elif options.interface == "curses":
         interfaces.curses.options = options
         s = interfaces.curses.Curses()
+        s.run()
+
+    elif options.interface == "urwid":
+        interfaces.urwid.options = options
+        interfaces.urwid.args = args
+        s = interfaces.urwid.Urwid()
         s.run()
 
     else:
