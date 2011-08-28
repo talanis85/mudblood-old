@@ -20,7 +20,7 @@ def main():
                       action =  "store",
                       dest =    "interface",
                       type =    "choice",
-                      choices = ["serial", "curses", "urwid"],
+                      choices = ["serial", "curses"],
                       default = "serial",
                       help =    "Choices: serial (default) or curses",)
 
@@ -41,11 +41,6 @@ def main():
         s.run()
 
     elif options.interface == "curses":
-        interfaces.curses.options = options
-        s = interfaces.curses.Curses()
-        s.run()
-
-    elif options.interface == "urwid":
         interfaces.urwid.options = options
         interfaces.urwid.args = args
         s = interfaces.urwid.Urwid()
