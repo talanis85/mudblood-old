@@ -83,8 +83,18 @@ class Session:
 
     def _input_run(self):
         while self.connected:
+            data = self.telnet.read_some()
+            if data == "":
+                self.connected = False
+                self._do_callback(Event.CLOSED)
+                break
+
             try:
-                data = self.telnet.read_very_eager()
+                d = self.telnet.read_very_eager()
+                while d != "":
+                    data += d
+                    d = self.telnet.read_very_eager()
+            
             except EOFError, e:
                 self.connected = False
                 self._do_callback(Event.CLOSED)
@@ -92,9 +102,6 @@ class Session:
             except:
                 break
 
-            if data == "":
-                continue
-            
             data = data.replace("\r\n", self.NEWLINE)
 
             # Process complete lines
