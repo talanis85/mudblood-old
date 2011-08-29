@@ -8,7 +8,7 @@ class IOStream:
         self.out = ""
 
     def has_data(self):
-        return self.out == ""
+        return self.out != ""
 
     def read(self, blocking=False):
         self.lock.acquire();
