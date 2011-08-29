@@ -14,7 +14,8 @@ from optparse import OptionParser
 VERSION = "0.1"
 
 def main():
-    parser = OptionParser()
+    parser = OptionParser(usage="Usage: %prog [options] <host> <port>",
+                          version="mudblood " + VERSION)
 
     parser.add_option("-i", "--interface",
                       action =  "store",
@@ -34,6 +35,9 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    if len(args) < 2:
+        parser.print_usage()
+        sys.exit(1)
 
     if options.interface == "serial":
         interfaces.serial.options = options
