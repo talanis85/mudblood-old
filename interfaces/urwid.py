@@ -75,6 +75,9 @@ class Urwid:
         if typ == Event.STDIO:
             self.w_session.append_data(ob.out[arg].read(), redraw=True) 
         elif typ == Event.CLOSED:
+            for o in ob.out:
+                if o.has_data():
+                    self.w_session.append_data(o.read(), redraw=True) 
             self.w_session.append_data("Session closed.\n", 'info', redraw=True)
         elif typ == Event.CONNECTED:
             self.w_session.append_data("Session started.\n", 'info', redraw=True)
@@ -172,6 +175,7 @@ class SessionWidget(urwid.BoxWidget):
             t = self.input.get_edit_text()
             self.input.set_edit_text("")
             self.history.append(t)
+            self.history_pos = 0
             self.session.stdin.writeln(t)
         elif key == 'tab':
             if self.completer:
