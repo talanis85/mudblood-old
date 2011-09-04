@@ -1,6 +1,9 @@
 import threading
 import telnetlib
 import socket
+import traceback
+
+from map import Mapper, Map, Room, MapNotification
 
 class IOStream:
     def __init__(self):
@@ -31,23 +34,29 @@ class IOStream:
 
 class Event:
     STDIO       = 1
-    ERROR       = 2
-    CONNECTED   = 3
-    CLOSED      = 4
+    INFO        = 2
+    ERROR       = 3
+    CONNECTED   = 4
+    CLOSED      = 5
 
 class Session:
     NEWLINE = "\n";
 
-    def __init__(self, host, port, callback=None):
+    def __init__(self, mud, callback=None):
         self.input_thread = threading.Thread(None, self._input_run)
         self.output_thread = threading.Thread(None, self._output_run)
         self.input_thread.daemon = True
         self.output_thread.daemon = True
-        self.host, self.port = host, port
+        self.mud = mud
         self.out = [ IOStream() ]
         self.stderr = self.out[0]
         self.stdin = IOStream()
+        self.info = IOStream()
+
         self.completer = Completer()
+        self.mapper = Mapper(mud)
+
+        self.input_buf = ""
 
         self.connected = False
         self.mode = 0
@@ -57,7 +66,7 @@ class Session:
 
     def connect(self):
         try:
-            self.telnet = telnetlib.Telnet(self.host, self.port)
+            self.telnet = telnetlib.Telnet(self.mud.host, self.mud.port)
         except Exception, msg:
             self.stderr.writeln("Could not connect: %s." % msg)
             self._do_callback(Event.ERROR)
@@ -104,17 +113,17 @@ class Session:
 
             data = data.replace("\r\n", self.NEWLINE)
 
-            # Process complete lines
             self.fresh_data += data
-            if self.NEWLINE in self.fresh_data:
-                lines = self.fresh_data.split(self.NEWLINE)
-                if self.fresh_data[-1] == self.NEWLINE:
-                    self.fresh_data = ""
-                else:
-                    self.fresh_data = lines[-1]
-                    lines = lines[:-1]
-                for l in lines:
-                    self._process_line(l)
+
+            if self.mud.strings['prompt'] in data:
+                index = self.fresh_data.find(self.mud.strings['prompt'])
+                try:
+                    self.process_response(self.input_buf, self.fresh_data[:index].strip())
+                except Exception, e:
+                    self.stderr.writeln(traceback.format_exc())
+                    self._do_callback(Event.ERROR)
+                self.input_buf = ""
+                self.fresh_data = self.fresh_data[index+len(self.mud.strings['prompt']):]
 
             # Write to output stream
             if not self.mode in self.out:
@@ -125,6 +134,7 @@ class Session:
     def _output_run(self):
         while self.connected:
             data = self.stdin.read(True)
+            self.input_buf = data.strip()
             try:
                 self.telnet.write(data)
             except IOError, e:
@@ -132,8 +142,24 @@ class Session:
                 self._do_callback(Event.ERROR)
                 self.connected = False
 
-    def _process_line(self, line):
-        self.completer.parse_line(line)
+    def process_response(self, call, response):
+        if response == self.mud.strings['command_not_found']:
+            return
+
+        d = self.mud.Direction.canonical(call)
+        if d:
+            ret = self.mapper.go_to(d, response)
+            if ret == MapNotification.NEW_CYCLE:
+                self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
+                self._do_callback(Event.INFO)
+
+        self.completer.parse(response)
+
+    def run_command(self, cmd):
+        if cmd[0] == "map":
+            return self.mapper.run_command(cmd[1:])
+        else:
+            return False
 
 class Completer:
     nouns = set()
@@ -150,7 +176,7 @@ class Completer:
 
         return None
 
-    def parse_line(self, line):
+    def parse(self, line):
         for word in line.split():
             if word[0] >= 'A' and word[0] <= 'Z':
                 self.nouns.add(filter(lambda x: x.isalpha(), word).lower())

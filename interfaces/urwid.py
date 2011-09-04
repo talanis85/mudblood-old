@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import sys
+
 import urwid
 import traceback
 import threading
@@ -32,13 +34,24 @@ class Urwid:
     def run(self):
         global args
 
-        self.session = Session(args[0], int(args[1]), self.session_callback)
+        if len(args) == 1:
+            #mud = __import__("mud." + args[0])
+            mud = getattr(__import__("mud", None, None, [args[0]]), args[0])
+            self.session = Session(mud, self.session_callback)
+        elif len(args) == 2:
+            mud = __import__("mud_base")
+            mud.host = args[0]
+            mud.port = int(args[1])
+            self.session = Session(mud, self.session_callback)
+        else:
+            return -1
 
         self.w_session = SessionWidget(self.session)
         self.w_status = StatusWidget()
 
-        self.w_main_pile = urwid.Pile([self.w_session, ('fixed', 1, urwid.Filler(urwid.AttrMap(self.w_status, 'user_input')))])
-        self.w_main_pile.set_focus(0)
+        #self.w_main_pile = urwid.Pile([self.w_session, ('fixed', 1, urwid.Filler(urwid.AttrMap(self.w_status, 'user_input')))])
+        #self.w_main_pile.set_focus(0)
+        self.w_frame = urwid.Frame(self.w_session, None, urwid.AttrMap(self.w_status, 'user_input'))
 
         palette = [
                 ('default', 'default', 'default'),
@@ -49,7 +62,7 @@ class Urwid:
 
         screen = urwid.raw_display.Screen()
 
-        self.loop = ThreadSafeMainLoop(self.w_main_pile, palette, screen, handle_mouse=False, input_filter=self.master_input)
+        self.loop = ThreadSafeMainLoop(self.w_frame, palette, screen, handle_mouse=False, input_filter=self.master_input)
 
         self.session.connect()
 
@@ -60,12 +73,13 @@ class Urwid:
 
         for k in keys:
             if k == "esc":
+                self.end_overlay()
                 self.w_status.set_caption("")
                 self.w_status.set_edit_text("")
-                self.w_main_pile.set_focus(0)
+                self.w_frame.set_focus('body')
             elif k == options.prefix:
                 self.w_status.set_caption(options.prefix)
-                self.w_main_pile.set_focus(1)
+                self.w_frame.set_focus('footer')
             else:
                 outk.append(k)
 
@@ -74,6 +88,8 @@ class Urwid:
     def session_callback(self, ob, typ, arg):
         if typ == Event.STDIO:
             self.w_session.append_data(ob.out[arg].read(), redraw=True) 
+        if typ == Event.INFO:
+            self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:
             for o in ob.out:
                 if o.has_data():
@@ -82,20 +98,40 @@ class Urwid:
         elif typ == Event.CONNECTED:
             self.w_session.append_data("Session started.\n", 'info', redraw=True)
         elif typ == Event.ERROR:
-            self.w_session.append_data(ob.stderr.read() + "\n", 'error')
+            self.w_session.append_data(ob.stderr.read() + "\n", 'error', redraw=True)
 
     def set_status(self, msg):
         self.w_status.set_caption(msg)
 
+    def start_overlay(self, widget):
+        self.w_overlay = urwid.Overlay(urwid.LineBox(widget), self.w_session, 'center', ('relative', 80), 'middle', ('relative', 80))
+        self.w_frame.set_body(self.w_overlay)
+
+    def end_overlay(self):
+        self.w_frame.set_body(self.w_session)
+
     def run_command(self, cmd):
         c = cmd.split()
-        try:
-            getattr(self, "cmd_" + c[0])(c[1:])
-        except AttributeError:
+        if hasattr(self, "cmd_" + c[0]):
+            ret = getattr(self, "cmd_" + c[0])(c[1:])
+        else:
+            ret = self.session.run_command(c)
+        if ret:
+            if isinstance(ret, str):
+                self.set_status(ret)
+            else:
+                self.set_status("")
+        else:
             self.set_status("Command not found.")
 
     def cmd_quit(self, args):
         raise urwid.ExitMainLoop()
+
+    def cmd_showmap(self, args):
+        self.start_overlay(MapWidget(self.session.mapper))
+        return True
+
+
 
 class SessionWidget(urwid.BoxWidget):
     class SessionList(urwid.ListWalker):
@@ -232,6 +268,19 @@ class StatusWidget(urwid.Edit):
             global master
             master.run_command(self.get_edit_text())
             self.set_edit_text("")
-            master.w_main_pile.set_focus(0)
+            master.w_frame.set_focus('body')
         else:
             return urwid.Edit.keypress(self, size, key)
+
+
+class MapWidget(urwid.WidgetWrap):
+    def __init__(self, mapper):
+        self.mapper = mapper
+        self.text = urwid.Text("", align='center')
+        
+        urwid.WidgetWrap.__init__(self, urwid.Filler(self.text))
+
+        self.update_map()
+
+    def update_map(self):
+        self.text.set_text("\n".join(self.mapper.map.render()))

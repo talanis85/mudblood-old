@@ -35,23 +35,23 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    if len(args) < 2:
-        parser.print_usage()
-        sys.exit(1)
-
     if options.interface == "serial":
         interfaces.serial.options = options
         s = interfaces.serial.Serial()
-        s.run()
+        r = s.run()
 
     elif options.interface == "curses":
         interfaces.urwid.options = options
         interfaces.urwid.args = args
         s = interfaces.urwid.Urwid()
-        s.run()
+        r = s.run()
 
     else:
         print "Interface not known"
+        sys.exit(1)
+
+    if r == -1:
+        parser.print_usage()
         sys.exit(1)
 
 main()
