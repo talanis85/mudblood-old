@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# $Id$
 
 # mudblood - A mud client
 #
@@ -7,7 +8,7 @@
 from __future__ import absolute_import
 
 import sys
-import interfaces.serial, interfaces.curses, interfaces.urwid
+import interfaces.serial, interfaces.urwid
 
 from optparse import OptionParser
 

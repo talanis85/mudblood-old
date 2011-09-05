@@ -1,3 +1,5 @@
+# $Id$
+
 import threading
 import telnetlib
 import socket
@@ -6,6 +8,9 @@ import traceback
 from map import Mapper, Map, Room, MapNotification
 
 class IOStream:
+    """
+        Asynchronous IO class.
+    """
     def __init__(self):
         self.lock = threading.Condition()
         self.out = ""
@@ -14,6 +19,12 @@ class IOStream:
         return self.out != ""
 
     def read(self, blocking=False):
+        """
+            Read everything from the stream.
+
+            @param blocking     If True, the method blocks when no data is available.
+            @return             A string of new data.
+        """
         self.lock.acquire();
         if self.out == "" and blocking:
             self.lock.wait()
@@ -24,6 +35,11 @@ class IOStream:
         return ret;
 
     def write(self, data):
+        """
+            Write data to the stream.
+
+            @param data     A string of data
+        """
         self.lock.acquire()
         self.out += data
         self.lock.notify_all();
@@ -33,6 +49,9 @@ class IOStream:
         self.write(data + "\n")
 
 class Event:
+    """
+        Enum with all events that trigger the callback.
+    """
     STDIO       = 1
     INFO        = 2
     ERROR       = 3
@@ -40,9 +59,18 @@ class Event:
     CLOSED      = 5
 
 class Session:
+    """
+        A single game session. Asynchronous I/O is handled via a callback.
+    """
     NEWLINE = "\n";
 
     def __init__(self, mud, callback=None):
+        """
+            Create a session.
+
+            @param mud      The mud definition object.
+            @param callback Callback for Async I/O
+        """
         self.input_thread = threading.Thread(None, self._input_run)
         self.output_thread = threading.Thread(None, self._output_run)
         self.input_thread.daemon = True
@@ -91,6 +119,9 @@ class Session:
             self.callback(self, typ, arg)
 
     def _input_run(self):
+        """
+            Thread function that reads data from the server.
+        """
         while self.connected:
             data = self.telnet.read_some()
             if data == "":
@@ -132,6 +163,9 @@ class Session:
             self._do_callback(Event.STDIO, self.mode)
     
     def _output_run(self):
+        """
+            Thread function that reads input from the input stream.
+        """
         while self.connected:
             data = self.stdin.read(True)
             self.input_buf = data.strip()
@@ -143,6 +177,13 @@ class Session:
                 self.connected = False
 
     def process_response(self, call, response):
+        """
+            Called when we got a response to a command. Could be used for custom hook
+            functions.
+
+            @param call     The input that caused the response
+            @param response The response
+        """
         if response == self.mud.strings['command_not_found']:
             return
 

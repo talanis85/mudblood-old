@@ -1,22 +1,37 @@
+# $Id$
+
 import time
 
-from collections import namedtuple
-
 def instantiate(cls, mud, *args):
+    """
+        Map, Room and Edge must be intantiated using this method,
+
+        @param cls      The class to intantiate
+        @param mud      The mud definition object
+        @param *args    Arguments to __init__
+        @return         The new object
+    """
     return type(cls)(cls.__name__ + '_', (cls,), {'mud': mud})(*args)
 
 # ---
 
 class Edge:
+    """
+        An edge of a graph
+    """
     def __init__(self, to, name=""):
         self.to = to
         self.name = name
 
 class Room:
+    """
+        A node in the graph
+    """
     def __init__(self, text="", tag=""):
         self.text = text
         self.tag = tag
 
+        # TODO: This should really be a set
         self.exits = []
         self.x, self.y = 0, 0
         self.mark = 0
@@ -26,6 +41,12 @@ class Room:
         return self.tag
 
     def add_exit(self, room, name):
+        """
+            Connect two rooms in both directions, thus keeping the graph undirected.
+
+            @param room     The room to connect self to
+            @param name     The (canonical) name of the direction
+        """
         if room.has_exit(self.mud.Direction.opposite(name)):
             raise Map.MapInconsistencyError("Duplicate exit %s in %s" % (self.mud.Direction.opposite(name), room))
         if self.has_exit(name):
@@ -35,6 +56,11 @@ class Room:
         room.exits.append(instantiate(Edge, self.mud, self, self.mud.Direction.opposite(name)))
 
     def remove_exit(self, name):
+        """
+            Remove an exit. Again, the opposite direction is also removed.
+            
+            @param name     The direction to remove
+        """
         e = self.get_exit(name)
         if e:
             self.exits.remove(e)
@@ -55,6 +81,15 @@ class Room:
         return None
 
     def _update_coords(self, x, y, mark, comp):
+        """
+            Set the coordinates for this room and recurse to all
+            adjacent rooms.
+
+            @param x    The x coordinate
+            @param y    The y coordinate
+            @param mark A unique value to mark already visited rooms
+            @param comp An integer defining the connected component
+        """
         self.x = x
         self.y = y
         self.mark = mark
@@ -80,6 +115,11 @@ class MapNotification:
     NEW_CYCLE = 1
 
 class Mapper:
+    """
+        Provides automapping functionality. Client modules should interface with the mapper
+        using Mapper.go_to().
+    """
+
     def __init__(self, mud):
         self.mud = mud
 
@@ -89,6 +129,15 @@ class Mapper:
         self.last_cycle = None
 
     def go_to(self, direction, text=""):
+        """
+            Do what is needed to go in a certain direction. When in auto-mode, creates rooms
+            as needed. When in fixed-mode, only updates current_room.
+
+            @param direction    The direction to move
+            @param text         Text to associate with the room (unused)
+            @return             None or a MapNotification to indicate a special condition.
+                                (such as a new cycle)
+        """
         self.last_cycle = None
 
         if self.mode == "off":
@@ -129,6 +178,9 @@ class Mapper:
             self.move_stack.append((self.map.current_room, direction, 2))
 
     def undo(self):
+        """
+            Undo the last action.
+        """
         r, d, t = self.move_stack.pop()
 
         self.map.current_room = self.move_stack[-1][0]
@@ -139,6 +191,8 @@ class Mapper:
             self.map.rooms.remove(r)
 
         return (r, d, t)
+
+    # COMMANDS
 
     def run_command(self, cmd):
         if cmd == []:
@@ -217,6 +271,12 @@ class Map:
         return r
 
     def add(self, room):
+        """
+            Add a room to the map.
+
+            @param room     The room to add.
+            @return         Just that room.
+        """
         self.rooms.append(room);
         return room
 
@@ -224,7 +284,7 @@ class Map:
         """
             Render the map to ASCII.
 
-            @return The rendered ASCII art
+            @return     A list of strings, each forming a single line.
         """
         if self.rooms == []:
             return []
@@ -233,11 +293,18 @@ class Map:
         comp = 0
         mincoords = []
 
+        # To render the graph, we have to assign each room a coordinate value that should
+        # reflect the topology of the game reasonably good. For this, we do a DFS on every
+        # Room we haven't visited so far (Room._update_coords()). Each DFS gives us coordinates
+        # for a single connected component of the graph.
         for r in self.rooms:
             if r.mark != mark:
                 mincoords.append(r._update_coords(0, 0, mark, comp))
                 comp += 1
 
+        # Sometimes, MUD rooms don't strictly follow euclidian geometry, making it possible
+        # for two rooms in one connected component to have the same coordinates. We resolve these
+        # conflicts by stretching the map so that every room gets unique coordinates.
         change = True
         while change:
             change = False
@@ -263,6 +330,7 @@ class Map:
         allret = []
         bridges = []
 
+        # Now that we have all coordinates, we can draw the map
         for c in range(comp):
             comprooms = filter(lambda r: r.comp == c, self.rooms)
 

@@ -1,3 +1,8 @@
+#
+# mud_base.py
+#
+# MUD definition base module. Must be imported by MUD definitions.
+
 class Direction:
     class NoDirectionError(Exception):
         pass
