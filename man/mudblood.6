@@ -1,0 +1,156 @@
+.Dd Sep 4, 2011
+.Dt MUDBLOOD 6
+.Sh NAME
+.Nm mudblood
+.Nd A text-based MUD client.
+.Sh SYNOPSIS
+.Nm
+.Op Fl i Ar interface
+.Op Fl p Ar prefix
+.Ar host Ar port
+.Nm
+.Op Fl i Ar interface
+.Op Fl p Ar prefix
+.Ar name
+.Sh DESCRIPTION
+mudblood is a text-based client for Multi User Dungeons (MUDs).
+If
+.Ar host
+and
+.Ar port
+are given, it connects to the MUD on the specified server.
+If
+.Ar name
+is given, the server is read from the specified MUD definition (see below).
+.Ss Command line options:
+.Bl -tag -width
+.It Fl i Ar interface
+mudblood currently provides two interfaces:
+serial (default) and curses.
+.It Fl p Ar prefix
+Set the prefix character for commands. Default is \(dq.\(dq
+.El
+.Ss The automapper
+mudblood can automatically construct maps of the MUD and display them as ASCII art.
+Note: The automapper can only recognize directions that are defined in the MUD's
+definition script. For details, see FILES section.
+.Pp
+To start the automapper, type
+.Dl .map mode auto
+When the mapper is in auto-mode, it will recognize all known movement commands and try to
+build a reasonable map as you walk. To have a look at the current map, type
+.Dl .showmap
+Press Escape to leave the map window.
+.Pp
+The mapper will do its best to recognize movement errors. For example, in typical MUDs,
+when you try to move in a direction that does not exist, the game will answer with a standard
+error message. This error message can be defined in the MUD definition script and the automapper
+will not move when it encounters that message. However, sometimes a faulty move does not
+result in the standard error. Then, the mapper has no way to detect the error and will
+execute the move nevertheless. To keep the map consistent, you have to undo its move. Type:
+.Dl .map undo
+to revert to the last position. You can undo as many times as you want.
+.Pp
+Often you will have a cycle in your map (i.e. room A leads to room B leads to Room C leads to Room A).
+As we cannot identify rooms, the mapper tries to detect these cycles by the map's topological structure.
+E.g. when you walk a path south-west-north-east, the mapper will assume that you are back at your original
+position and print a message that it has detected a cycle. If you agree to the cycle, no additional work
+is needed. However, when you think there should be no cycle, you can type
+.Dl .map nocycle
+to disagree. The mapper will then assume that the current room is a new room and rearrange the map.
+.Pp
+Of course, the mapper keeps track of where you currently are in the map. But sometimes, problems can occur
+and your map position does not match your real position in the game. Type
+.Dl .map move <direction>
+to navigate the map, until your position is correct again.
+.Pp
+To prevent further changes in the map, type:
+.Dl .map mode freeze
+In that mode, the mapper will stop creating new rooms. To stop the mapper completely, type:
+.Dl .map mode off
+.Sh FILES
+To save keystrokes and - more importantly - make features like the automapper
+work, mudblood uses MUD definition scripts to configure itself for a certain MUD.
+A MUD definition script is a python module that \(dqsubclasses\(dq the base
+module (mud_base.py) and changes whatever is needed (actually, python modules cannot
+be subclassed; however, we simply import all available symbols from the base module which
+is conceptually similar).
+.Pp
+Currently, mudblood uses the following fields from the definition script:
+.Bl -tag -width
+.It host
+The hostname / IP of the MUD server
+.It port
+The port to connect to
+.It strings
+An associative array (map) with the following fields:
+.Bl -tag -width
+.It command_not_found
+What the MUD typically answers when you type a non-existent command
+.It prompt
+The prompt that is displayed in the MUD (default: \(dq> \(dq)
+.El
+.It Direction
+A class that is used by the automapper. It defines the possible directions we can move.
+.El
+.Ss Example 1:
+The most simple application of a MUD definition consists only of a host and port definition:
+.Bd -literal -offset indent
+# This first line is generally mandatory!
+from mud_base import *
+
+host = "localhost"
+port = 9999
+.Ed
+.Pp
+This script defines a MUD that listens on localhost:9999.
+.Ss Example 2:
+The automapper works out-of-the-box only for certain german MUDs that use the MGLib MudLib.
+The reason for this is that it needs to know the various directions you can move in the MUD,
+together with their opposite directions etc. If the MUD you want to play is not of that built-in
+type, you have to provide some information yourself, using the \(dqDirection\(dq class of the
+mud_base module.
+.Pp
+The following example should provide a working basis for most english-speaking MUDs:
+.Bd -literal -offset indent
+from mud_base import *
+# the following line is needed to subclass the Direction class
+import mud_base
+
+class Direction(mud_base.Direction):
+    # standard directions
+    NORTH = "n"
+    NORTHWEST = "nw"
+    WEST = "w"
+    SOUTHWEST = "sw"
+    SOUTH = "s"
+    SOUTHEAST = "se"
+    EAST = "e"
+    NORTHEAST = "ne"
+
+    # all directions with their opposites
+    directions = [
+            # aliases for the       opposite
+            # same direction
+            (['n', 'north'],        's'),
+            (['nw', 'northwest'],   'se'),
+            (['w', 'west'],         'e'),
+            (['sw', 'southwest'],   'ne'),
+            (['s', 'south'],        'n'),
+            (['se', 'southeast'],   'nw'),
+            (['e', 'east'],         'w'),
+            (['ne', 'northeast'],   'sw'),
+            (['u', 'up'],           'd'),
+            (['d', 'down'],         'u'),
+        ]
+
+# Change the following to fit your MUD
+strings['command_not_found'] = "Command not found"
+strings['prompt'] = "> "
+
+host = "localhost"
+port = 9999
+.Ed
+.Pp
+Since the definition script is really just a python module, the automapper can be customized even
+further. To dive in, see the implementation in src/mud_base.py.
