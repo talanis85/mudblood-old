@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import sys
+import os
 
 import urwid
 import traceback
@@ -36,7 +37,14 @@ class Urwid:
 
         if len(args) == 1:
             #mud = __import__("mud." + args[0])
-            mud = getattr(__import__("mud", None, None, [args[0]]), args[0])
+            #mud = getattr(__import__("mudblood.mud", None, None, [args[0]]), args[0])
+            mud = object()
+            if os.path.exists(os.path.expanduser("~/.config/mudblood/" + args[0])):
+                execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud)
+            else:
+                print "MUD definition not found"
+                return -2
+
             self.session = Session(mud, self.session_callback)
         elif len(args) == 2:
             mud = __import__("mud_base")

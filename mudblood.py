@@ -8,7 +8,7 @@
 from __future__ import absolute_import
 
 import sys
-import interfaces.serial, interfaces.urwid
+import mudblood.interfaces.serial, mudblood.interfaces.urwid
 
 from optparse import OptionParser
 
@@ -37,14 +37,14 @@ def main():
     (options, args) = parser.parse_args()
 
     if options.interface == "serial":
-        interfaces.serial.options = options
-        s = interfaces.serial.Serial()
+        mudblood.interfaces.serial.options = options
+        s = mudblood.interfaces.serial.Serial()
         r = s.run()
 
     elif options.interface == "curses":
-        interfaces.urwid.options = options
-        interfaces.urwid.args = args
-        s = interfaces.urwid.Urwid()
+        mudblood.interfaces.urwid.options = options
+        mudblood.interfaces.urwid.args = args
+        s = mudblood.interfaces.urwid.Urwid()
         r = s.run()
 
     else:
