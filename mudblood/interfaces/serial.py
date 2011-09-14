@@ -1,7 +1,7 @@
 import sys
 import readline
 
-from session import Session, Event
+from mudblood.session import Session, Event
 
 VERSION = "0.1"
 

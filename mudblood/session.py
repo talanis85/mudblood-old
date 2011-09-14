@@ -84,13 +84,15 @@ class Session:
         self.completer = Completer()
         self.mapper = Mapper(mud)
 
-        self.input_buf = ""
+        self.input_stack = []
 
         self.connected = False
         self.mode = 0
         self.properties = {}
         self.callback = callback
         self.fresh_data = ""
+
+        self.biglock = threading.Lock()
 
     def connect(self):
         try:
@@ -142,6 +144,8 @@ class Session:
             except:
                 break
 
+            self.biglock.acquire()
+
             data = data.replace("\r\n", self.NEWLINE)
 
             self.fresh_data += data
@@ -149,12 +153,13 @@ class Session:
             if self.mud.strings['prompt'] in data:
                 index = self.fresh_data.find(self.mud.strings['prompt'])
                 try:
-                    self.process_response(self.input_buf, self.fresh_data[:index].strip())
+                    self.process_response(self.input_stack.pop(), self.fresh_data[:index].strip())
                 except Exception, e:
                     self.stderr.writeln(traceback.format_exc())
                     self._do_callback(Event.ERROR)
-                self.input_buf = ""
                 self.fresh_data = self.fresh_data[index+len(self.mud.strings['prompt']):]
+
+            self.biglock.release()
 
             # Write to output stream
             if not self.mode in self.out:
@@ -168,7 +173,13 @@ class Session:
         """
         while self.connected:
             data = self.stdin.read(True)
-            self.input_buf = data.strip()
+            
+            self.biglock.acquire()
+
+            self.input_stack.extend(data.strip().split("\n"))
+
+            self.biglock.release()
+
             try:
                 self.telnet.write(data)
             except IOError, e:
@@ -184,6 +195,8 @@ class Session:
             @param call     The input that caused the response
             @param response The response
         """
+        #self.info.writeln("call: %s\nresponse: %s" % (call, response))
+        #self._do_callback(Event.INFO)
         if response == self.mud.strings['command_not_found']:
             return
 

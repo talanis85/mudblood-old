@@ -7,7 +7,7 @@ import urwid
 import traceback
 import threading
 
-from session import Session, Event
+from mudblood.session import Session, Event
 
 VERSION = "0.1"
 
@@ -27,6 +27,18 @@ class ThreadSafeMainLoop(urwid.MainLoop):
             urwid.MainLoop.draw_screen(self)
         self.draw_lock.release()
 
+class DynamicOverlay(urwid.Overlay):
+    def selectable(self):
+        return self.top_w.selectable() or self.bottom_w.selectable()
+
+    def keypress(self, size, key):
+        if self.top_w.selectable():
+            key = self.top_w.keypress(size, key)
+        if key and self.bottom_w.selectable():
+            return self.bottom_w.keypress(size, key)
+        else:
+            return key
+
 class Urwid:
     def __init__(self):
         global master
@@ -38,9 +50,9 @@ class Urwid:
         if len(args) == 1:
             #mud = __import__("mud." + args[0])
             #mud = getattr(__import__("mudblood.mud", None, None, [args[0]]), args[0])
-            mud = object()
+            mud = __import__("mudblood.mud_base")
             if os.path.exists(os.path.expanduser("~/.config/mudblood/" + args[0])):
-                execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud)
+                execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud.__dict__)
             else:
                 print "MUD definition not found"
                 return -2
@@ -57,8 +69,6 @@ class Urwid:
         self.w_session = SessionWidget(self.session)
         self.w_status = StatusWidget()
 
-        #self.w_main_pile = urwid.Pile([self.w_session, ('fixed', 1, urwid.Filler(urwid.AttrMap(self.w_status, 'user_input')))])
-        #self.w_main_pile.set_focus(0)
         self.w_frame = urwid.Frame(self.w_session, None, urwid.AttrMap(self.w_status, 'user_input'))
 
         palette = [
@@ -67,6 +77,8 @@ class Urwid:
                 ('info', 'dark blue', 'default'),
                 ('error', 'dark red', 'default'),
                 ]
+
+        self.w_map = MapWidget(self.session.mapper)
 
         screen = urwid.raw_display.Screen()
 
@@ -95,24 +107,27 @@ class Urwid:
 
     def session_callback(self, ob, typ, arg):
         if typ == Event.STDIO:
-            self.w_session.append_data(ob.out[arg].read(), redraw=True) 
+            self.w_session.append_data(ob.out[arg].read()) 
+            self.w_map.update_map()
         if typ == Event.INFO:
             self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:
             for o in ob.out:
                 if o.has_data():
-                    self.w_session.append_data(o.read(), redraw=True) 
-            self.w_session.append_data("Session closed.\n", 'info', redraw=True)
+                    self.w_session.append_data(o.read()) 
+            self.w_session.append_data("Session closed.\n", 'info')
         elif typ == Event.CONNECTED:
-            self.w_session.append_data("Session started.\n", 'info', redraw=True)
+            self.w_session.append_data("Session started.\n", 'info')
         elif typ == Event.ERROR:
-            self.w_session.append_data(ob.stderr.read() + "\n", 'error', redraw=True)
+            self.w_session.append_data(ob.stderr.read() + "\n", 'error')
+
+        self.loop.draw_screen()
 
     def set_status(self, msg):
         self.w_status.set_caption(msg)
 
     def start_overlay(self, widget):
-        self.w_overlay = urwid.Overlay(urwid.LineBox(widget), self.w_session, 'center', ('relative', 80), 'middle', ('relative', 80))
+        self.w_overlay = DynamicOverlay(urwid.LineBox(widget), self.w_session, 'center', ('relative', 80), 'middle', ('relative', 80))
         self.w_frame.set_body(self.w_overlay)
 
     def end_overlay(self):
@@ -124,6 +139,7 @@ class Urwid:
             ret = getattr(self, "cmd_" + c[0])(c[1:])
         else:
             ret = self.session.run_command(c)
+            self.w_map.update_map()
         if ret:
             if isinstance(ret, str):
                 self.set_status(ret)
@@ -136,7 +152,7 @@ class Urwid:
         raise urwid.ExitMainLoop()
 
     def cmd_showmap(self, args):
-        self.start_overlay(MapWidget(self.session.mapper))
+        self.start_overlay(self.w_map)
         return True
 
 
@@ -263,10 +279,6 @@ class SessionWidget(urwid.BoxWidget):
         self._invalidate()
         self.text._invalidate()
 
-        if redraw:
-            global master
-            master.loop.draw_screen()
-
         self.data_lock.release()
 
 
@@ -285,10 +297,30 @@ class MapWidget(urwid.WidgetWrap):
     def __init__(self, mapper):
         self.mapper = mapper
         self.text = urwid.Text("", align='center')
+
+        self.mode = ""
+        self.direction_buf = ""
         
         urwid.WidgetWrap.__init__(self, urwid.Filler(self.text))
 
         self.update_map()
 
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        if key == "f2":
+            if self.mapper.map.current_room:
+                self.mapper.map.current_room.preferred_correction = (self.mapper.map.current_room.preferred_correction + 1) % 9
+                self.update_map()
+        else:
+            return key
+
     def update_map(self):
-        self.text.set_text("\n".join(self.mapper.map.render()))
+        if self.mapper.map.current_room:
+            try:
+                self.text.set_text("\n".join(self.mapper.map.render()) + "\nCorrection: %d" % self.mapper.map.current_room.preferred_correction)
+            except Exception, e:
+                global master
+                master.w_session.append_data(traceback.format_exc(), 'error')
+            self._invalidate()
