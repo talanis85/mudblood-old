@@ -30,44 +30,6 @@ serial (default) and curses.
 .It Fl p Ar prefix
 Set the prefix character for commands. Default is \(dq.\(dq
 .El
-.Ss The automapper
-mudblood can automatically construct maps of the MUD and display them as ASCII art.
-Note: The automapper can only recognize directions that are defined in the MUD's
-definition script. For details, see FILES section.
-.Pp
-To start the automapper, type
-.Dl .map mode auto
-When the mapper is in auto-mode, it will recognize all known movement commands and try to
-build a reasonable map as you walk. To have a look at the current map, type
-.Dl .showmap
-Press Escape to leave the map window.
-.Pp
-The mapper will do its best to recognize movement errors. For example, in typical MUDs,
-when you try to move in a direction that does not exist, the game will answer with a standard
-error message. This error message can be defined in the MUD definition script and the automapper
-will not move when it encounters that message. However, sometimes a faulty move does not
-result in the standard error. Then, the mapper has no way to detect the error and will
-execute the move nevertheless. To keep the map consistent, you have to undo its move. Type:
-.Dl .map undo
-to revert to the last position. You can undo as many times as you want.
-.Pp
-Often you will have a cycle in your map (i.e. room A leads to room B leads to Room C leads to Room A).
-As we cannot identify rooms, the mapper tries to detect these cycles by the map's topological structure.
-E.g. when you walk a path south-west-north-east, the mapper will assume that you are back at your original
-position and print a message that it has detected a cycle. If you agree to the cycle, no additional work
-is needed. However, when you think there should be no cycle, you can type
-.Dl .map nocycle
-to disagree. The mapper will then assume that the current room is a new room and rearrange the map.
-.Pp
-Of course, the mapper keeps track of where you currently are in the map. But sometimes, problems can occur
-and your map position does not match your real position in the game. Type
-.Dl .map move <direction>
-to navigate the map, until your position is correct again.
-.Pp
-To prevent further changes in the map, type:
-.Dl .map mode freeze
-In that mode, the mapper will stop creating new rooms. To stop the mapper completely, type:
-.Dl .map mode off
 .Sh FILES
 To save keystrokes and - more importantly - make features like the automapper
 work, mudblood uses MUD definition scripts to configure itself for a certain MUD.
