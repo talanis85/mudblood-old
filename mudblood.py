@@ -7,7 +7,7 @@
 
 from __future__ import absolute_import
 
-import sys
+import sys, os
 import mudblood.interfaces.serial, mudblood.interfaces.urwid
 
 from optparse import OptionParser
@@ -36,20 +36,33 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    if len(args) == 1:
+        mud = __import__("mudblood.mud_base")
+        if os.path.exists(os.path.expanduser("~/.config/mudblood/" + args[0])):
+            execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud.__dict__)
+        else:
+            print "MUD definition not found"
+            sys.exit(1)
+    elif len(args) == 2:
+        mud = __import__("mud_base")
+        mud.host = args[0]
+        mud.port = int(args[1])
+    else:
+        mud = None
+
+    iface = None
+
     if options.interface == "serial":
-        mudblood.interfaces.serial.options = options
-        s = mudblood.interfaces.serial.Serial()
-        r = s.run()
-
+        iface = mudblood.interfaces.serial
     elif options.interface == "curses":
-        mudblood.interfaces.urwid.options = options
-        mudblood.interfaces.urwid.args = args
-        s = mudblood.interfaces.urwid.Urwid()
-        r = s.run()
-
+        iface = mudblood.interfaces.urwid
     else:
         print "Interface not known"
         sys.exit(1)
+
+    iface.args = args
+    iface.options = options
+    r = iface.Interface(mud).run()
 
     if r == -1:
         parser.print_usage()

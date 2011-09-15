@@ -27,6 +27,8 @@ class ThreadSafeMainLoop(urwid.MainLoop):
             urwid.MainLoop.draw_screen(self)
         self.draw_lock.release()
 
+
+
 class DynamicOverlay(urwid.Overlay):
     def selectable(self):
         return self.top_w.selectable() or self.bottom_w.selectable()
@@ -39,32 +41,16 @@ class DynamicOverlay(urwid.Overlay):
         else:
             return key
 
-class Urwid:
-    def __init__(self):
+
+
+class Interface:
+    def __init__(self, mud = None):
         global master
         master = self
+        self.mud = mud
 
     def run(self):
-        global args
-
-        if len(args) == 1:
-            #mud = __import__("mud." + args[0])
-            #mud = getattr(__import__("mudblood.mud", None, None, [args[0]]), args[0])
-            mud = __import__("mudblood.mud_base")
-            if os.path.exists(os.path.expanduser("~/.config/mudblood/" + args[0])):
-                execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud.__dict__)
-            else:
-                print "MUD definition not found"
-                return -2
-
-            self.session = Session(mud, self.session_callback)
-        elif len(args) == 2:
-            mud = __import__("mud_base")
-            mud.host = args[0]
-            mud.port = int(args[1])
-            self.session = Session(mud, self.session_callback)
-        else:
-            return -1
+        self.session = Session(self.mud, self.session_callback)
 
         self.w_session = SessionWidget(self.session)
         self.w_status = StatusWidget()
@@ -77,8 +63,6 @@ class Urwid:
                 ('info', 'dark blue', 'default'),
                 ('error', 'dark red', 'default'),
                 ]
-
-        self.w_map = MapWidget(self.session.mapper)
 
         screen = urwid.raw_display.Screen()
 
@@ -108,7 +92,6 @@ class Urwid:
     def session_callback(self, ob, typ, arg):
         if typ == Event.STDIO:
             self.w_session.append_data(ob.out[arg].read()) 
-            self.w_map.update_map()
         if typ == Event.INFO:
             self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:
@@ -133,13 +116,14 @@ class Urwid:
     def end_overlay(self):
         self.w_frame.set_body(self.w_session)
 
-    def run_command(self, cmd):
+    def command(self, cmd):
         c = cmd.split()
+
         if hasattr(self, "cmd_" + c[0]):
             ret = getattr(self, "cmd_" + c[0])(c[1:])
         else:
-            ret = self.session.run_command(c)
-            self.w_map.update_map()
+            ret = self.session.command(c)
+
         if ret:
             if isinstance(ret, str):
                 self.set_status(ret)
@@ -150,10 +134,6 @@ class Urwid:
 
     def cmd_quit(self, args):
         raise urwid.ExitMainLoop()
-
-    def cmd_showmap(self, args):
-        self.start_overlay(self.w_map)
-        return True
 
 
 
@@ -282,45 +262,13 @@ class SessionWidget(urwid.BoxWidget):
         self.data_lock.release()
 
 
+
 class StatusWidget(urwid.Edit):
     def keypress(self, size, key):
         if key == "enter":
             global master
-            master.run_command(self.get_edit_text())
+            master.command(self.get_edit_text())
             self.set_edit_text("")
             master.w_frame.set_focus('body')
         else:
             return urwid.Edit.keypress(self, size, key)
-
-
-class MapWidget(urwid.WidgetWrap):
-    def __init__(self, mapper):
-        self.mapper = mapper
-        self.text = urwid.Text("", align='center')
-
-        self.mode = ""
-        self.direction_buf = ""
-        
-        urwid.WidgetWrap.__init__(self, urwid.Filler(self.text))
-
-        self.update_map()
-
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        if key == "f2":
-            if self.mapper.map.current_room:
-                self.mapper.map.current_room.preferred_correction = (self.mapper.map.current_room.preferred_correction + 1) % 9
-                self.update_map()
-        else:
-            return key
-
-    def update_map(self):
-        if self.mapper.map.current_room:
-            try:
-                self.text.set_text("\n".join(self.mapper.map.render()) + "\nCorrection: %d" % self.mapper.map.current_room.preferred_correction)
-            except Exception, e:
-                global master
-                master.w_session.append_data(traceback.format_exc(), 'error')
-            self._invalidate()

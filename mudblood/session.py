@@ -5,8 +5,6 @@ import telnetlib
 import socket
 import traceback
 
-from map import Mapper, Map, Room, MapNotification
-
 class IOStream:
     """
         Asynchronous IO class.
@@ -82,7 +80,6 @@ class Session:
         self.info = IOStream()
 
         self.completer = Completer()
-        self.mapper = Mapper(mud)
 
         self.input_stack = []
 
@@ -195,25 +192,13 @@ class Session:
             @param call     The input that caused the response
             @param response The response
         """
-        #self.info.writeln("call: %s\nresponse: %s" % (call, response))
-        #self._do_callback(Event.INFO)
         if response == self.mud.strings['command_not_found']:
             return
 
-        d = self.mud.Direction.canonical(call)
-        if d:
-            ret = self.mapper.go_to(d, response)
-            if ret == MapNotification.NEW_CYCLE:
-                self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
-                self._do_callback(Event.INFO)
-
         self.completer.parse(response)
 
-    def run_command(self, cmd):
-        if cmd[0] == "map":
-            return self.mapper.run_command(cmd[1:])
-        else:
-            return False
+    def command(self, cmd, args):
+        return False
 
 class Completer:
     nouns = set()

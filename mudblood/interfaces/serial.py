@@ -5,16 +5,20 @@ from mudblood.session import Session, Event
 
 VERSION = "0.1"
 
-class Serial:
-    def __init__(self):
+class Interface:
+    def __init__(self, mud):
         self.sname = ""
         self.sessions = {}
 
+        if mud:
+            self.sessions['default'] = Session(mud, self.session_cb)
+            self.sname = "default"
+
     def message(self, msg):
-        print '\033[34m' + msg + '\033[0m'
+        print '\033[34m' + msg + '\033[33m'
 
     def error(self, msg):
-        print '\033[33m' + msg + '\033[0m'
+        print '\033[33m' + msg + '\033[33m'
 
     def session(self):
         if self.sname == "":
@@ -30,23 +34,22 @@ class Serial:
 
         readline.parse_and_bind("tab: complete")
 
+        if self.session():
+            self.session().connect()
+
+        sys.stdout.write('\033[33m')
         while True:
             try:
                 line = raw_input()
             except EOFError, e:
                 break
+            sys.stdout.write('\033[0m')
 
             words = line.split()
 
             if len(words) > 0 and words[0][0] == options.prefix:
                 args = words[1:]
-                try:
-                    getattr(self, "cmd_%s" % words[0][1:])(*args)
-                except TypeError:
-                    self.error("Syntax error")
-                    self.cmd_help(words[0][1:])
-                except AttributeError:
-                    self.error("Unknown command")
+                self.command(words[0][1:], args)
             else:
                 if self.session() == None:
                     self.error("Not connected")
@@ -63,7 +66,7 @@ class Serial:
                 break
 
         if ob == self.session() and typ == Event.STDIO:
-            sys.stdout.write(ob.out[arg].read())
+            sys.stdout.write('\033[0m' + ob.out[arg].read() + '\033[33m')
             sys.stdout.flush()
         elif typ == Event.ERROR:
             self.error(ob.stderr.read())
@@ -88,6 +91,22 @@ class Serial:
                 sys.stdout.write(i.read())
 
     # commands ---
+
+    def command(self, cmd, args):
+        ret = None
+
+        if hasattr(self, "cmd_" + cmd):
+            try:
+                ret = getattr(self, "cmd_%s" % cmd)(*args)
+            except TypeError:
+                self.error("Syntax error")
+        else:
+            ret = self.session().command(cmd, args)
+
+        if ret:
+            self.message(ret)
+        else:
+            self.error("Unknown command")
 
     def cmd_session(self, name, host="", port=0):
         """.session <name> [<host> <port>]
