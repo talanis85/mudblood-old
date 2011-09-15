@@ -4,6 +4,7 @@ import sys
 import os
 
 import urwid
+import urwid.curses_display
 import traceback
 import threading
 
@@ -64,7 +65,7 @@ class Interface:
                 ('error', 'dark red', 'default'),
                 ]
 
-        screen = urwid.raw_display.Screen()
+        screen = urwid.curses_display.Screen()
 
         self.loop = ThreadSafeMainLoop(self.w_frame, palette, screen, handle_mouse=False, input_filter=self.master_input)
 
@@ -116,13 +117,11 @@ class Interface:
     def end_overlay(self):
         self.w_frame.set_body(self.w_session)
 
-    def command(self, cmd):
-        c = cmd.split()
-
-        if hasattr(self, "cmd_" + c[0]):
-            ret = getattr(self, "cmd_" + c[0])(c[1:])
+    def command(self, cmd, args):
+        if hasattr(self, "cmd_" + cmd):
+            ret = getattr(self, "cmd_" + cmd)(*args)
         else:
-            ret = self.session.command(c)
+            ret = self.session.command(cmd, args)
 
         if ret:
             if isinstance(ret, str):
@@ -132,7 +131,7 @@ class Interface:
         else:
             self.set_status("Command not found.")
 
-    def cmd_quit(self, args):
+    def cmd_quit(self):
         raise urwid.ExitMainLoop()
 
 
@@ -267,7 +266,10 @@ class StatusWidget(urwid.Edit):
     def keypress(self, size, key):
         if key == "enter":
             global master
-            master.command(self.get_edit_text())
+
+            words = self.get_edit_text().split()
+
+            master.command(words[0], words[1:])
             self.set_edit_text("")
             master.w_frame.set_focus('body')
         else:
