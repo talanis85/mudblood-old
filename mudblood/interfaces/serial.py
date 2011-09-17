@@ -5,6 +5,12 @@ from mudblood.session import Session, Event
 
 VERSION = "0.1"
 
+class Colors:
+    OFF = '\033[0m'
+    MESSAGE = '\033[34m'
+    ERROR = '\033[33m'
+    INPUT = '\033[33m'
+
 class Interface:
     def __init__(self, mud):
         self.sname = ""
@@ -15,10 +21,10 @@ class Interface:
             self.sname = "default"
 
     def message(self, msg):
-        print '\033[34m' + msg + '\033[33m'
+        print Colors.MESSAGE + msg + Colors.INPUT
 
     def error(self, msg):
-        print '\033[33m' + msg + '\033[33m'
+        print Colors.ERROR + msg + Colors.INPUT
 
     def session(self):
         if self.sname == "":
@@ -34,16 +40,16 @@ class Interface:
 
         readline.parse_and_bind("tab: complete")
 
+        sys.stdout.write(Colors.INPUT)
+
         if self.session():
             self.session().connect()
 
-        sys.stdout.write('\033[33m')
         while True:
             try:
                 line = raw_input()
             except EOFError, e:
                 break
-            sys.stdout.write('\033[0m')
 
             words = line.split()
 
@@ -66,7 +72,7 @@ class Interface:
                 break
 
         if ob == self.session() and typ == Event.STDIO:
-            sys.stdout.write('\033[0m' + ob.out[arg].read() + '\033[33m')
+            sys.stdout.write(Colors.OFF + ob.out[arg].read() + Colors.INPUT)
             sys.stdout.flush()
         elif typ == Event.ERROR:
             self.error(ob.stderr.read())
