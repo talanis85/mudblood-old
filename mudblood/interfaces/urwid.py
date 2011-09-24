@@ -140,6 +140,7 @@ class SessionWidget(urwid.BoxWidget):
     class SessionList(urwid.ListWalker):
         def __init__(self, w_session):
             self.w_session = w_session
+            self.focus = 0
 
         def get_next(self, start_from):
             if isinstance(start_from, int):
@@ -160,11 +161,14 @@ class SessionWidget(urwid.BoxWidget):
             return (urwid.Text(self.w_session.lines[n-1]), n-1)
 
         def get_focus(self):
-            n = len(self.w_session.lines) - 1
-            return (urwid.Text(self.w_session.lines[n]), n)
+            return (urwid.Text(self.w_session.lines[self.focus]), self.focus)
 
-        def set_focus(self, focus):
-            pass
+        def set_focus(self, scr):
+            self.focus = scr
+            if self.focus > len(self.w_session.lines) - 1:
+                self.focus = len(self.w_session.lines) - 1
+            if self.focus < 0:
+                self.focus = 0
 
     class SessionListBox(urwid.ListBox):
         def rows(self, (maxcol,), focus=False):
@@ -196,10 +200,11 @@ class SessionWidget(urwid.BoxWidget):
         textc = self.text.render((size[0], h), focus)
         c.overlay(textc, 0, size[1] - h)
 
-        x = 0
-        for l in self.lines[-1]:
-            x += len(l[1])
-        c.overlay(self.input_attr.render((size[0]-x,), focus), x, size[1]-1)
+        if size[1] > len(self.lines) or self.text.get_focus()[1] == len(self.lines) - 1:
+            x = 0
+            for l in self.lines[-1]:
+                x += len(l[1])
+            c.overlay(self.input_attr.render((size[0]-x,), focus), x, size[1]-1)
 
         return c
 
@@ -233,7 +238,10 @@ class SessionWidget(urwid.BoxWidget):
             self.history_pos = (self.history_pos + (key == 'up' and 1 or -1)) % len(self.history)
             self.input.set_edit_text(self.history[-self.history_pos])
             self.input.set_edit_pos(10000)
+        elif key == 'page up' or key == 'page down':
+            self.text.keypress(size, key)
         else:
+            self.text.set_focus(len(self.lines)-1)
             self.completer_state = 0
             ret = self.input.keypress((size[0],), key)
 
@@ -254,6 +262,8 @@ class SessionWidget(urwid.BoxWidget):
             self.lines.append([])
             (a,b,c) = c.partition("\n")
             self.lines[-1].append((attr, a))
+
+        self.text.set_focus(len(self.lines)-1)
 
         self._invalidate()
         self.text._invalidate()
