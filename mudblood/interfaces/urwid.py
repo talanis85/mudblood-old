@@ -263,8 +263,6 @@ class SessionWidget(urwid.BoxWidget):
             (a,b,c) = c.partition("\n")
             self.lines[-1].append((attr, a))
 
-        self.text.set_focus(len(self.lines)-1)
-
         self._invalidate()
         self.text._invalidate()
 
