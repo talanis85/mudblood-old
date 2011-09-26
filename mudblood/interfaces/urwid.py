@@ -177,6 +177,8 @@ class SessionWidget(urwid.BoxWidget):
     def __init__(self, session):
         self.data_lock = threading.Lock()
 
+        self.scrolling = False
+
         self.session = session
         self.data = ""
         self.lines = [[]]
@@ -214,6 +216,7 @@ class SessionWidget(urwid.BoxWidget):
     def keypress(self, size, key):
         ret = None
 
+        self.scrolling = False
         if key == 'enter':
             self.append_data(self.input.get_edit_text() + "\n", 'user_input')
             t = self.input.get_edit_text()
@@ -239,6 +242,7 @@ class SessionWidget(urwid.BoxWidget):
             self.input.set_edit_text(self.history[-self.history_pos])
             self.input.set_edit_pos(10000)
         elif key == 'page up' or key == 'page down':
+            self.scrolling = True
             self.text.keypress(size, key)
         else:
             self.text.set_focus(len(self.lines)-1)
@@ -262,6 +266,9 @@ class SessionWidget(urwid.BoxWidget):
             self.lines.append([])
             (a,b,c) = c.partition("\n")
             self.lines[-1].append((attr, a))
+
+        if not self.scrolling:
+            self.text.set_focus(len(self.lines)-1)
 
         self._invalidate()
         self.text._invalidate()
