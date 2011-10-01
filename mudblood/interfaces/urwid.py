@@ -92,7 +92,7 @@ class Interface:
 
     def session_callback(self, ob, typ, arg):
         if typ == Event.STDIO:
-            self.w_session.append_data(ob.out[arg].read()) 
+            self.w_session.append_data(("%d:" % arg) + ob.out[arg].read()) 
         if typ == Event.INFO:
             self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:

@@ -158,10 +158,17 @@ class Session:
 
             self.biglock.release()
 
+            lines = data.splitlines(True)
+
+            for l in lines:
+                for h in self.mud.input_hooks:
+                    if not h.process(self, l):
+                        break
+
             # Write to output stream
-            if not self.mode in self.out:
-                self.out[self.mode] = IOStream()
-            self.out[self.mode].write(data)
+            #if not self.mode in self.out:
+            #    self.out[self.mode] = IOStream()
+            #self.out[self.mode].write(data)
             self._do_callback(Event.STDIO, self.mode)
     
     def _output_run(self):
