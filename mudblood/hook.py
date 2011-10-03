@@ -31,6 +31,18 @@ class HighlightHook(Hook):
         else:
             return line
 
+class HighlightLineHook(Hook):
+    def __init__(self, regex, color):
+        self.regex = regex
+        self.color = color
+
+    def process(self, session, line):
+        m = re.search(self.regex, line)
+        if m:
+            return ("\033[3%dm" % self.color) + line + "\033[0m"
+        else:
+            return line
+
 class FunctionHook(Hook):
     def __init__(self, cond, fun):
         self.cond = cond
