@@ -68,12 +68,12 @@ class Interface:
 
                 ("00", 'default', 'default'),
                 ("10", 'black', 'default'),
-                ("20", 'light red', 'default'),
-                ("30", 'light green', 'default'),
-                ("40", 'yellow', 'default'),
-                ("50", 'light blue', 'default'),
-                ("60", 'light magenta', 'default'),
-                ("70", 'light cyan', 'default'),
+                ("20", 'dark red', 'default'),
+                ("30", 'dark green', 'default'),
+                ("40", 'brown', 'default'),
+                ("50", 'dark blue', 'default'),
+                ("60", 'dark magenta', 'default'),
+                ("70", 'dark cyan', 'default'),
                 ("80", 'white', 'default'),
 
                 # Unfortunately no 'bold' support in curses_display
