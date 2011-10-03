@@ -17,11 +17,6 @@ def load_mud_definition(path):
     else:
         return None
 
-class DefaultHook(Hook):
-    def process(self, session, line):
-        session.out[0].write(line)
-        return None
-
 class IOStream:
     """
         Asynchronous IO class.
@@ -95,8 +90,6 @@ class Session:
         self.stderr = self.out[0]
         self.stdin = IOStream()
         self.info = IOStream()
-
-        self.mud.input_hooks.append(DefaultHook())
 
         self.completer = Completer()
 
@@ -184,11 +177,9 @@ class Session:
                     l = h.process(self, l)
                     if not l:
                         break
+                if l:
+                    self.out[0].write(l)
 
-            # Write to output stream
-            #if not self.mode in self.out:
-            #    self.out[self.mode] = IOStream()
-            #self.out[self.mode].write(data)
             self._do_callback(Event.STDIO, 0)
     
     def _output_run(self):
