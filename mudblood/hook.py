@@ -19,6 +19,17 @@ class StreamHook(Hook):
 
         return line
 
+class SuppressHook(Hook):
+    def __init__(self, regex):
+        self.regex = regex
+
+    def process(self, session, line):
+        m = re.search(self.regex, line)
+        if m:
+            return None
+        else:
+            return line
+
 class HighlightHook(Hook):
     def __init__(self, regex, color):
         self.regex = regex
