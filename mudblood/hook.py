@@ -30,3 +30,14 @@ class HighlightHook(Hook):
             return m.group(1) + ("\033[3%dm" % self.color) + m.group(2) + "\033[0m" + m.group(3) + "\n"
         else:
             return line
+
+class FunctionHook(Hook):
+    def __init__(self, cond, fun):
+        self.cond = cond
+        self.fun = fun
+
+    def process(self, session, line):
+        if self.cond(session, line):
+            self.fun(session, line)
+
+        return line
