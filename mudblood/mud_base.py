@@ -67,3 +67,5 @@ strings = {
     'prompt': "\n> ",
     'command_not_found': "Hae?",
     }
+
+input_hooks = []

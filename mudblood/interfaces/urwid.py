@@ -117,7 +117,7 @@ class Interface:
         if typ == Event.STDIO:
             for o in ob.out:
                 if ob.out[o].has_data():
-                    self.w_session.append_data(("%d:" % o) + ob.out[o].read()) 
+                    self.w_session.append_data(ob.out[o].read()) 
         if typ == Event.INFO:
             self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:
