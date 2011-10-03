@@ -5,6 +5,13 @@ import telnetlib
 import socket
 import traceback
 
+from hook import Hook
+
+class DefaultHook(Hook):
+    def process(self, session, line):
+        session.out[0].write(line)
+        return None
+
 class IOStream:
     """
         Asynchronous IO class.
@@ -74,10 +81,12 @@ class Session:
         self.input_thread.daemon = True
         self.output_thread.daemon = True
         self.mud = mud
-        self.out = [ IOStream() ]
+        self.out = { 0: IOStream() }
         self.stderr = self.out[0]
         self.stdin = IOStream()
         self.info = IOStream()
+
+        self.mud.input_hooks.append(DefaultHook())
 
         self.completer = Completer()
 
@@ -162,14 +171,15 @@ class Session:
 
             for l in lines:
                 for h in self.mud.input_hooks:
-                    if not h.process(self, l):
+                    l = h.process(self, l)
+                    if not l:
                         break
 
             # Write to output stream
             #if not self.mode in self.out:
             #    self.out[self.mode] = IOStream()
             #self.out[self.mode].write(data)
-            self._do_callback(Event.STDIO, self.mode)
+            self._do_callback(Event.STDIO, 0)
     
     def _output_run(self):
         """
@@ -190,6 +200,11 @@ class Session:
                 self.stderr.writeln("Connection closed.")
                 self._do_callback(Event.ERROR)
                 self.connected = False
+
+    def write_to_stream(self, stream, data):
+        if not stream in self.out:
+            self.out[stream] = IOStream()
+        self.out[stream].write(data)
 
     def process_response(self, call, response):
         """

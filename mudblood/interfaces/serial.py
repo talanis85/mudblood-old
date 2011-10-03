@@ -2,14 +2,9 @@ import sys
 import readline
 
 from mudblood.session import Session, Event
+from mudblood.colors import Colors
 
 VERSION = "0.1"
-
-class Colors:
-    OFF = '\033[0m'
-    MESSAGE = '\033[34m'
-    ERROR = '\033[33m'
-    INPUT = '\033[33m'
 
 class Interface:
     def __init__(self, mud):

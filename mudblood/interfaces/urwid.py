@@ -3,6 +3,8 @@ from __future__ import absolute_import
 import sys
 import os
 
+import re
+
 import urwid
 import urwid.curses_display
 import traceback
@@ -63,6 +65,27 @@ class Interface:
                 ('user_input', 'brown', 'default'),
                 ('info', 'dark blue', 'default'),
                 ('error', 'dark red', 'default'),
+
+                ("00", 'default', 'default'),
+                ("10", 'black', 'default'),
+                ("20", 'light red', 'default'),
+                ("30", 'light green', 'default'),
+                ("40", 'yellow', 'default'),
+                ("50", 'light blue', 'default'),
+                ("60", 'light magenta', 'default'),
+                ("70", 'light cyan', 'default'),
+                ("80", 'white', 'default'),
+
+                # Unfortunately no 'bold' support in curses_display
+                ("01", 'default', 'default'),
+                ("11", 'black', 'default'),
+                ("21", 'light red', 'default'),
+                ("31", 'light green', 'default'),
+                ("41", 'yellow', 'default'),
+                ("51", 'light blue', 'default'),
+                ("61", 'light magenta', 'default'),
+                ("71", 'light cyan', 'default'),
+                ("81", 'white', 'default'),
                 ]
 
         screen = urwid.curses_display.Screen()
@@ -92,13 +115,15 @@ class Interface:
 
     def session_callback(self, ob, typ, arg):
         if typ == Event.STDIO:
-            self.w_session.append_data(("%d:" % arg) + ob.out[arg].read()) 
+            for o in ob.out:
+                if ob.out[o].has_data():
+                    self.w_session.append_data(("%d:" % o) + ob.out[o].read()) 
         if typ == Event.INFO:
             self.w_session.append_data(ob.info.read(), 'info') 
         elif typ == Event.CLOSED:
             for o in ob.out:
-                if o.has_data():
-                    self.w_session.append_data(o.read()) 
+                if ob.out[o].has_data():
+                    self.w_session.append_data(ob.out[o].read()) 
             self.w_session.append_data("Session closed.\n", 'info')
         elif typ == Event.CONNECTED:
             self.w_session.append_data("Session started.\n", 'info')
@@ -193,6 +218,8 @@ class SessionWidget(urwid.BoxWidget):
         self.input = urwid.Edit("")
         self.input_attr = urwid.AttrMap(self.input, 'user_input')
 
+        self.current_attr = "00"
+
         self.text = self.SessionListBox(self.SessionList(self))
 
     def render(self, size, focus=False):
@@ -255,27 +282,51 @@ class SessionWidget(urwid.BoxWidget):
 
         return ret
 
-    def append_data(self, data, attr='default', redraw=False):
+    def append_data(self, data, attr='00', redraw=False):
         self.data_lock.acquire()
 
-        self.data += data
+        last_attr = self.current_attr
+        if attr != '00':
+            self.current_attr = attr
 
         (a,b,c) = data.partition("\n")
-        self.lines[-1].append((attr, a))
+        self.lines[-1].extend(self.parse_attributes(a))
         while b == "\n":
             self.lines.append([])
             (a,b,c) = c.partition("\n")
-            self.lines[-1].append((attr, a))
+            self.lines[-1].extend(self.parse_attributes(a))
 
         if not self.scrolling:
             self.text.set_focus(len(self.lines)-1)
+
+        self.current_attr = last_attr
 
         self._invalidate()
         self.text._invalidate()
 
         self.data_lock.release()
 
+    def parse_attributes(self, data):
+        ret = []
 
+        while data != "":
+            m = re.match(r"(.*?)(\033\[\d+m)(.*)", data)
+            if not m:
+                ret.append((self.current_attr, data))
+                return ret
+            ret.append((self.current_attr, m.group(1)))
+
+            # currently, the parser supports 8 colors and bold
+            if m.group(2)[2] == "1":
+                self.current_attr = self.current_attr[0] + '1'
+            elif m.group(2)[2] == "3":
+                self.current_attr = str(int(m.group(2)[3])+1)[0] + self.current_attr[1]
+            elif m.group(2)[2] == "0":
+                self.current_attr = "00"
+
+            data = m.group(3)
+
+        return ret
 
 class StatusWidget(urwid.Edit):
     def keypress(self, size, key):
