@@ -159,7 +159,14 @@ class Interface:
     def cmd_quit(self):
         raise urwid.ExitMainLoop()
 
-
+    def cmd_reload(self):
+        from mudblood.session import load_mud_definition
+        if self.mud.path != "":
+            self.mud = load_mud_definition(self.mud.path)
+            self.session.mud = self.mud
+            return "Ok."
+        else:
+            return "No MUD def file used."
 
 class SessionWidget(urwid.BoxWidget):
     class SessionList(urwid.ListWalker):

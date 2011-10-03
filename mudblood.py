@@ -9,6 +9,7 @@ from __future__ import absolute_import
 
 import sys, os
 import mudblood.interfaces.serial, mudblood.interfaces.urwid
+from mudblood.session import load_mud_definition
 
 from optparse import OptionParser
 
@@ -37,10 +38,8 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args) == 1:
-        mud = __import__("mudblood.mud_base")
-        if os.path.exists(os.path.expanduser("~/.config/mudblood/" + args[0])):
-            execfile(os.path.expanduser("~/.config/mudblood/" + args[0]), mud.__dict__)
-        else:
+        mud = load_mud_definition(os.path.expanduser("~/.config/mudblood/" + args[0]))
+        if not mud:
             print "MUD definition not found"
             sys.exit(1)
     elif len(args) == 2:

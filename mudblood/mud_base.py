@@ -60,6 +60,8 @@ class Direction:
                 return ds[1]
         raise cls.NoDirectionError()
 
+path = ""
+
 host = "localhost"
 port = 9999
 

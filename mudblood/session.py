@@ -7,6 +7,16 @@ import traceback
 
 from hook import Hook
 
+def load_mud_definition(path):
+    import os
+    mud = __import__("mudblood.mud_base")
+    if os.path.exists(path):
+        execfile(path, mud.__dict__)
+        mud.path = path
+        return mud
+    else:
+        return None
+
 class DefaultHook(Hook):
     def process(self, session, line):
         session.out[0].write(line)
