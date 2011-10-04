@@ -162,8 +162,14 @@ class Interface:
     def cmd_reload(self):
         from mudblood.session import load_mud_definition
         if self.mud.path != "":
-            self.mud = load_mud_definition(self.mud.path)
-            self.session.mud = self.mud
+            try:
+                newmud = load_mud_definition(self.mud.path)
+            except Exception, e:
+                self.w_session.append_data(traceback.format_exc(), 'error')
+                return "Error in definition file."
+                
+            self.mud = newmud
+            self.session.mud = newmud
             return "Ok."
         else:
             return "No MUD def file used."
