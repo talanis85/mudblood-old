@@ -173,10 +173,15 @@ class Session:
             lines = data.splitlines(True)
 
             for l in lines:
-                for h in self.mud.input_hooks:
-                    l = h.process(self, l)
-                    if not l:
-                        break
+                try:
+                    for h in self.mud.input_hooks:
+                        l = h.process(self, l)
+                        if not l:
+                            break
+                except Exception, e:
+                    self.stderr.writeln(traceback.format_exc())
+                    self._do_callback(Event.ERROR)
+
                 if l:
                     self.out[0].write(l)
 
@@ -190,22 +195,33 @@ class Session:
             data = self.stdin.read(True)
             
             self.biglock.acquire()
-
             self.input_stack.extend(data.strip().split("\n"))
-
             self.biglock.release()
 
-            try:
-                self.telnet.write(data)
-            except IOError, e:
-                self.stderr.writeln("Connection closed.")
-                self._do_callback(Event.ERROR)
-                self.connected = False
+            for l in data.splitlines(True):
+                try:
+                    for h in self.mud.output_hooks:
+                        l = h.process(self, l)
+                        if not l:
+                            break
+                except Exception, e:
+                    self.stderr.writeln(traceback.format_exc())
+                    self._do_callback(Event.ERROR)
+
+                if l:
+                    try:
+                        self.telnet.write(l)
+                    except IOError, e:
+                        self.stderr.writeln("Connection closed.")
+                        self._do_callback(Event.ERROR)
+                        self.connected = False
+
 
     def write_to_stream(self, stream, data):
         if not stream in self.out:
             self.out[stream] = IOStream()
         self.out[stream].write(data)
+        self._do_callback(Event.STDOUT)
 
     def process_response(self, call, response):
         """

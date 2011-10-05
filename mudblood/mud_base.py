@@ -71,3 +71,4 @@ strings = {
     }
 
 input_hooks = []
+output_hooks = []
