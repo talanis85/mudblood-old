@@ -38,6 +38,7 @@ class Room:
         self.x, self.y = 0, 0
         self.mark = 0
         self.comp = 0
+        self.distance = 0
 
     def __repr__(self):
         return self.tag
@@ -152,11 +153,11 @@ class Mapper:
                 if self.mode != "auto":
                     return
 
+                self.map.update_coords()
                 new_room = instantiate(Room, self.mud, text)
 
                 try:
                     (x, y) = self.mud.Direction.calc(direction, self.map.current_room.x, self.map.current_room.y)
-                    self.map.update_coords()
 
                     for r in self.map.rooms:
                         if (r.x, r.y, r.comp) == (x, y, self.map.current_room.comp):
@@ -186,6 +187,35 @@ class Mapper:
                 return
             self.map.current_room = self.map.add(instantiate(Room, self.mud, text))
             self.move_stack.append((self.map.current_room, direction, 2))
+
+    def find_shortest_path(self, target_tag):
+        from heapq import heappush,heappop
+
+        target = None
+        for r in self.map.rooms:
+            if r.tag == target_tag:
+                target = r
+        if not target:
+            return None
+
+        self.map.current_room.shortest_path = []
+        pq = [(0, self.map.current_room)]
+        mark = time.time()
+
+        while len(pq) > 0:
+            curdist, curroom = heappop(pq)
+            curroom.mark = mark
+            curroom.distance = curdist
+            for e in curroom.exits:
+                if e.to.mark != mark or e.to.distance > curdist + 1:
+                    e.to.mark = mark
+                    e.to.shortest_path = curroom.shortest_path + [e.name]
+                    heappush(pq, (curdist + 1, e.to))
+
+        if target.mark == mark:
+            return target.shortest_path
+        else:
+            return None
 
     def undo(self):
         """
@@ -436,7 +466,10 @@ class Map:
                       '_': '+',
                       '\\': '|',
                       '/': '|' }
-                return m[orig]
+                if orig in m:
+                    return m[orig]
+                else:
+                    return orig
             
             def horiz(orig):
                 m = { ' ': '-',
@@ -445,7 +478,10 @@ class Map:
                       '_': '-',
                       '\\': '-',
                       '/': '-' }
-                return m[orig]
+                if orig in m:
+                    return m[orig]
+                else:
+                    return orig
             
             def diag1(orig):
                 m = { ' ': '\\',
@@ -454,7 +490,10 @@ class Map:
                       '_': '_',
                       '\\': '\\',
                       '/': 'X' }
-                return m[orig]
+                if orig in m:
+                    return m[orig]
+                else:
+                    return orig
 
             def diag2(orig):
                 m = { ' ': '/',
@@ -463,7 +502,10 @@ class Map:
                       '_': '_',
                       '\\': 'X',
                       '/': '/' }
-                return m[orig]
+                if orig in m:
+                    return m[orig]
+                else:
+                    return orig
 
 
             for r in comprooms:

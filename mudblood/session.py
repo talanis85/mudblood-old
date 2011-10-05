@@ -5,6 +5,8 @@ import telnetlib
 import socket
 import traceback
 
+from collections import deque
+
 from hook import Hook
 from map import Mapper, MapNotification
 
@@ -92,11 +94,13 @@ class Session:
         self.stdin = IOStream()
         self.info = IOStream()
 
+        self.response_condition = threading.Condition()
+
         self.mapper = Mapper(mud)
 
         self.completer = Completer()
 
-        self.input_stack = []
+        self.input_queue = deque([])
 
         self.connected = False
         self.mode = 0
@@ -165,11 +169,14 @@ class Session:
             if self.mud.strings['prompt'] in data:
                 index = self.fresh_data.find(self.mud.strings['prompt'])
                 try:
-                    self.process_response(self.input_stack.pop(), self.fresh_data[:index].strip())
+                    self.process_response(self.input_queue.popleft(), self.fresh_data[:index].strip())
                 except Exception, e:
                     self.stderr.writeln(traceback.format_exc())
                     self._do_callback(Event.ERROR)
                 self.fresh_data = self.fresh_data[index+len(self.mud.strings['prompt']):]
+                self.response_condition.acquire()
+                self.response_condition.notifyAll()
+                self.response_condition.release()
 
             self.biglock.release()
 
@@ -198,7 +205,7 @@ class Session:
             data = self.stdin.read(True)
             
             self.biglock.acquire()
-            self.input_stack.extend(data.strip().split("\n"))
+            self.input_queue.extend(data.strip().split("\n"))
             self.biglock.release()
 
             for l in data.splitlines(True):
@@ -218,6 +225,10 @@ class Session:
                         self.stderr.writeln("Connection closed.")
                         self._do_callback(Event.ERROR)
                         self.connected = False
+
+                    self.response_condition.acquire()
+                    self.response_condition.wait(1000)
+                    self.response_condition.release()
 
 
     def write_to_stream(self, stream, data):
@@ -250,7 +261,19 @@ class Session:
         if cmd == "map":
             return self.mapper.command(args[0], args[1:])
         else:
-            return False
+            if hasattr(self, "cmd_" + cmd):
+                return getattr(self, "cmd_" + cmd)(*args)
+            else:
+                return None
+
+    def cmd_walk(self, tag):
+        path = self.mapper.find_shortest_path(tag)
+
+        if path:
+            self.stdin.writeln("\n".join(path))
+            return "Path is: " + str(path)
+        else:
+            return "No path found."
 
 class Completer:
     nouns = set()
