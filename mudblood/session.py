@@ -94,8 +94,6 @@ class Session:
         self.stdin = IOStream()
         self.info = IOStream()
 
-        self.response_condition = threading.Condition()
-
         self.mapper = Mapper(mud)
 
         self.completer = Completer()
@@ -107,8 +105,6 @@ class Session:
         self.properties = {}
         self.callback = callback
         self.fresh_data = ""
-
-        self.biglock = threading.Lock()
 
     def connect(self):
         try:
@@ -160,29 +156,11 @@ class Session:
             except:
                 break
 
-            self.biglock.acquire()
-
             data = data.replace("\r\n", self.NEWLINE)
-
-            self.fresh_data += data
-
-            if self.mud.strings['prompt'] in data:
-                index = self.fresh_data.find(self.mud.strings['prompt'])
-                try:
-                    self.process_response(self.input_queue.popleft(), self.fresh_data[:index].strip())
-                except Exception, e:
-                    self.stderr.writeln(traceback.format_exc())
-                    self._do_callback(Event.ERROR)
-                self.fresh_data = self.fresh_data[index+len(self.mud.strings['prompt']):]
-                self.response_condition.acquire()
-                self.response_condition.notifyAll()
-                self.response_condition.release()
-
-            self.biglock.release()
-
             lines = data.splitlines(True)
 
             for l in lines:
+                self.completer.parse(l)
                 try:
                     for h in self.mud.input_hooks:
                         l = h.process(self, l)
@@ -204,10 +182,6 @@ class Session:
         while self.connected:
             data = self.stdin.read(True)
             
-            self.biglock.acquire()
-            self.input_queue.extend(data.strip().split("\n"))
-            self.biglock.release()
-
             for l in data.splitlines(True):
                 try:
                     for h in self.mud.output_hooks:
@@ -226,10 +200,13 @@ class Session:
                         self._do_callback(Event.ERROR)
                         self.connected = False
 
-                    self.response_condition.acquire()
-                    self.response_condition.wait(1000)
-                    self.response_condition.release()
-
+                    # Automapper
+                    d = self.mud.Direction.canonical(l.strip())
+                    if d:
+                        ret = self.mapper.go_to(d)
+                        if ret == MapNotification.NEW_CYCLE:
+                            self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
+                            self._do_callback(Event.INFO)
 
     def write_to_stream(self, stream, data):
         if not stream in self.out:
@@ -237,28 +214,10 @@ class Session:
         self.out[stream].write(data)
         self._do_callback(Event.STDOUT)
 
-    def process_response(self, call, response):
-        """
-            Called when we got a response to a command. Could be used for custom hook
-            functions.
-
-            @param call     The input that caused the response
-            @param response The response
-        """
-        if response == self.mud.strings['command_not_found']:
-            return
-
-        d = self.mud.Direction.canonical(call)
-        if d:
-            ret = self.mapper.go_to(d, response)
-            if ret == MapNotification.NEW_CYCLE:
-                self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
-                self._do_callback(Event.INFO)
-
-        self.completer.parse(response)
-
     def command(self, cmd, args):
-        if cmd == "map":
+        if hasattr(self.mud, "cmd_" + cmd):
+            return getattr(self.mud, "cmd_" + cmd)(self, *args)
+        elif cmd == "map":
             return self.mapper.command(args[0], args[1:])
         else:
             if hasattr(self, "cmd_" + cmd):
