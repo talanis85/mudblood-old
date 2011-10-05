@@ -58,6 +58,8 @@ class Interface:
         self.w_session = SessionWidget(self.session)
         self.w_status = StatusWidget()
 
+        self.w_map = MapWidget(self.session.mapper)
+
         self.w_frame = urwid.Frame(self.w_session, None, urwid.AttrMap(self.w_status, 'user_input'))
 
         palette = [
@@ -173,6 +175,11 @@ class Interface:
             return "Ok."
         else:
             return "No MUD def file used."
+
+    def cmd_showmap(self):
+        self.w_map.update_map()
+        self.start_overlay(self.w_map)
+        return True
 
 class SessionWidget(urwid.BoxWidget):
     class SessionList(urwid.ListWalker):
@@ -353,3 +360,35 @@ class StatusWidget(urwid.Edit):
             master.w_frame.set_focus('body')
         else:
             return urwid.Edit.keypress(self, size, key)
+
+class MapWidget(urwid.WidgetWrap):
+    def __init__(self, mapper):
+        self.mapper = mapper
+        self.text = urwid.Text("", align='center')
+
+        self.mode = ""
+        self.direction_buf = ""
+        
+        urwid.WidgetWrap.__init__(self, urwid.Filler(self.text))
+
+        self.update_map()
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        if key == "f2":
+            if self.mapper.map.current_room:
+                self.mapper.map.current_room.preferred_correction = (self.mapper.map.current_room.preferred_correction + 1) % 9
+                self.update_map()
+        else:
+            return key
+
+    def update_map(self):
+        if self.mapper.map.current_room:
+            try:
+                self.text.set_text("\n".join(self.mapper.map.render()))
+            except Exception, e:
+                global master
+                master.w_session.append_data(traceback.format_exc(), 'error')
+            self._invalidate()

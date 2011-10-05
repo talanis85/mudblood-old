@@ -6,6 +6,7 @@ import socket
 import traceback
 
 from hook import Hook
+from map import Mapper, MapNotification
 
 def load_mud_definition(path):
     import os
@@ -90,6 +91,8 @@ class Session:
         self.stderr = self.out[0]
         self.stdin = IOStream()
         self.info = IOStream()
+
+        self.mapper = Mapper(mud)
 
         self.completer = Completer()
 
@@ -234,10 +237,20 @@ class Session:
         if response == self.mud.strings['command_not_found']:
             return
 
+        d = self.mud.Direction.canonical(call)
+        if d:
+            ret = self.mapper.go_to(d, response)
+            if ret == MapNotification.NEW_CYCLE:
+                self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
+                self._do_callback(Event.INFO)
+
         self.completer.parse(response)
 
     def command(self, cmd, args):
-        return False
+        if cmd == "map":
+            return self.mapper.command(args[0], args[1:])
+        else:
+            return False
 
 class Completer:
     nouns = set()
