@@ -212,7 +212,7 @@ class Session:
         if not stream in self.out:
             self.out[stream] = IOStream()
         self.out[stream].write(data)
-        self._do_callback(Event.STDOUT)
+        self._do_callback(Event.STDIO)
 
     def command(self, cmd, args):
         if hasattr(self.mud, "cmd_" + cmd):

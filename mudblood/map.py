@@ -24,6 +24,7 @@ class Edge:
     def __init__(self, to, name=""):
         self.to = to
         self.name = name
+        self.split = False
 
 class Room:
     """
@@ -103,7 +104,7 @@ class Room:
         sx, sy = self.x, self.y
 
         for e in self.exits:
-            if e.to.mark == mark:
+            if e.to.mark == mark or e.split:
                 continue
             try:
                 (nx, ny) = self.mud.Direction.calc(e.name, self.x, self.y)
@@ -351,6 +352,12 @@ class Mapper:
                 self.map.current_room = r
                 return "Ok. Built cycle to %s." % r.tag
         return "Tag not found."
+
+    def cmd_split(self, args):
+        r1,r2,d = self.move_stack[-2][0], self.move_stack[-1][0], self.move_stack[-1][1]
+        r1.get_exit(d).split = True
+        r2.get_exit(self.mud.Direction.opposite(d)).split = True
+        return "Ok."
     
 class Map:
     """
@@ -510,7 +517,7 @@ class Map:
 
             for r in comprooms:
                 e = r.get_exit(self.mud.Direction.SOUTH)
-                if e:
+                if e and e.to.comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1
                     if e.to.x == r.x:
@@ -535,7 +542,7 @@ class Map:
                         ret[cy][cx] = "|"
 
                 e = r.get_exit(self.mud.Direction.EAST)
-                if e and e.to.y == r.y:
+                if e and e.to.y == r.y and e.to.comp == c:
                     cy = r.y * 3 + 1
                     cx = r.x * 3 + 1 + 1
                     while cx < w * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
@@ -543,7 +550,7 @@ class Map:
                         cx += 1
 
                 e = r.get_exit(self.mud.Direction.SOUTHEAST)
-                if e:
+                if e and e.to.comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 + 1
                     if e.to.y-e.to.x == r.y-r.x:
@@ -564,7 +571,7 @@ class Map:
                         ret[cy][cx] = "\\"
 
                 e = r.get_exit(self.mud.Direction.SOUTHWEST)
-                if e:
+                if e and e.to.comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 - 1
                     if e.to.y+e.to.x == (r.y+r.x):
