@@ -132,6 +132,7 @@ class Interface:
         elif typ == Event.ERROR:
             self.w_session.append_data(ob.stderr.read() + "\n", 'error')
 
+        self.w_map.update_map()
         self.loop.draw_screen()
 
     def set_status(self, msg):
@@ -387,7 +388,7 @@ class MapWidget(urwid.WidgetWrap):
     def update_map(self):
         if self.mapper.map.current_room:
             try:
-                self.text.set_text("\n".join(self.mapper.map.render()))
+                self.text.set_text("\n".join(self.mapper.map.render(True)))
             except Exception, e:
                 global master
                 master.w_session.append_data(traceback.format_exc(), 'error')

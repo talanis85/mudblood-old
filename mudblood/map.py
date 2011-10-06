@@ -4,19 +4,6 @@ import time
 import pickle
 from operator import attrgetter
 
-def instantiate(cls, mud, *args):
-    """
-        Map, Room and Edge must be intantiated using this method,
-
-        @param cls      The class to intantiate
-        @param mud      The mud definition object
-        @param *args    Arguments to __init__
-        @return         The new object
-    """
-    return type(cls)(cls.__name__, (cls,), {'mud': mud})(*args)
-
-# ---
-
 class Edge:
     """
         An edge of a graph
@@ -30,9 +17,10 @@ class Room:
     """
         A node in the graph
     """
-    def __init__(self, text="", tag=""):
-        self.text = text
+    def __init__(self, mud, tag=""):
         self.tag = tag
+        self.mud = mud
+        self.roomid = -1
 
         # TODO: This should really be a set
         self.exits = []
@@ -58,8 +46,8 @@ class Room:
             exits = ",".join(map(lambda e: e.name, self.exits))
             raise Map.MapInconsistencyError("Duplicate exit %s in %s. This room has exits: %s" % (name, room, exits))
 
-        self.exits.append(instantiate(Edge, self.mud, room, name))
-        room.exits.append(instantiate(Edge, self.mud, self, self.mud.Direction.opposite(name)))
+        self.exits.append(Edge(room, name))
+        room.exits.append(Edge(self, self.mud.Direction.opposite(name)))
 
     def remove_exit(self, name):
         """
@@ -126,18 +114,17 @@ class Mapper:
     def __init__(self, mud):
         self.mud = mud
 
-        self.map = instantiate(Map, self.mud)
+        self.map = Map(self.mud)
         self.mode = "fixed"
         self.move_stack = []
         self.last_cycle = None
 
-    def go_to(self, direction, text=""):
+    def go_to(self, direction):
         """
             Do what is needed to go in a certain direction. When in auto-mode, creates rooms
             as needed. When in fixed-mode, only updates current_room.
 
             @param direction    The direction to move
-            @param text         Text to associate with the room (unused)
             @return             None or a MapNotification to indicate a special condition.
                                 (such as a new cycle)
         """
@@ -155,12 +142,12 @@ class Mapper:
                     return
 
                 self.map.update_coords()
-                new_room = instantiate(Room, self.mud, text)
+                new_room = Room(self.mud)
 
                 try:
                     (x, y) = self.mud.Direction.calc(direction, self.map.current_room.x, self.map.current_room.y)
 
-                    for r in self.map.rooms:
+                    for r in self.map.rooms.itervalues():
                         if (r.x, r.y, r.comp) == (x, y, self.map.current_room.comp):
                             self.last_cycle = (self.map.current_room, new_room, direction)
                             try:
@@ -186,14 +173,14 @@ class Mapper:
         else:
             if self.mode != "auto":
                 return
-            self.map.current_room = self.map.add(instantiate(Room, self.mud, text))
+            self.map.current_room = self.map.add(Room(self.mud))
             self.move_stack.append((self.map.current_room, direction, 2))
 
     def find_shortest_path(self, target_tag):
         from heapq import heappush,heappop
 
         target = None
-        for r in self.map.rooms:
+        for r in self.map.rooms.itervalues():
             if r.tag == target_tag:
                 target = r
         if not target:
@@ -229,7 +216,7 @@ class Mapper:
         if t >= 1:
             self.map.current_room.remove_exit(d)
         if t == 2:
-            self.map.rooms.remove(r)
+            del self.map.rooms[r.roomid]
 
         return (r, d, t)
 
@@ -248,7 +235,7 @@ class Mapper:
         self.undo()
 
     def cmd_clear(self, args):
-        self.map.rooms = []
+        self.map.rooms = {}
         return "Map cleared."
 
     def cmd_nocycle(self, args):
@@ -306,7 +293,7 @@ class Mapper:
         if args == []:
             return "Go to which tag?"
         else:
-            for r in self.map.rooms:
+            for r in self.map.rooms.itervalues():
                 if r.tag == args[0]:
                     self.map.current_room = r
                     return "Ok."
@@ -319,18 +306,16 @@ class Mapper:
             return "Please give a map name."
 
         with open("maps/%s" % self.map.name, "w") as f:
-            pickle.dump(self.map, f)
+            MapPickler().save(self.map, f)
+            #pickle.dump(self.map, f)
         return "Ok."
 
     def cmd_load(self, args):
         if args == []:
             return "Load which map?"
         with open("maps/%s" % args[0], "r") as f:
-            self.map = pickle.load(f)
-
-        self.map.mud = self.mud
-        for r in self.map.rooms:
-            r.mud = self.mud
+            #self.map = pickle.load(f)
+            self.map = MapPickler().load(self.mud, f)
 
         return "Map %s loaded." % args[0]
 
@@ -344,7 +329,7 @@ class Mapper:
         if args == []:
             return "Build a cycle where?"
 
-        for r in self.map.rooms:
+        for r in self.map.rooms.itervalues():
             if r.tag == args[0]:
                 d = self.move_stack[-1][1]
                 self.undo()
@@ -366,10 +351,12 @@ class Map:
     class MapInconsistencyError(Exception):
         pass
 
-    def __init__(self):
+    def __init__(self, mud):
+        self.mud = mud
         self.name = ""
-        self.rooms = []
-        self.current_room = None
+        self.rooms = {}
+        self.nextid = 0
+        self.current_room = self.add(Room(self.mud))
 
     def __repr__(self):
         r = ""
@@ -386,11 +373,13 @@ class Map:
             @param room     The room to add.
             @return         Just that room.
         """
-        self.rooms.append(room);
+        room.roomid = self.nextid
+        self.rooms[self.nextid] = room;
+        self.nextid += 1
         return room
 
     def update_coords(self):
-        if self.rooms == []:
+        if self.rooms == {}:
             return 0
 
         mark = time.time()
@@ -400,7 +389,7 @@ class Map:
         # reflect the topology of the game reasonably good. For this, we do a DFS on every
         # Room we haven't visited so far (Room._update_coords()). Each DFS gives us coordinates
         # for a single connected component of the graph.
-        for r in self.rooms:
+        for r in self.rooms.itervalues():
             if r.mark != mark:
                 r._update_coords(0, 0, mark, comp)
                 comp += 1
@@ -408,11 +397,12 @@ class Map:
         return comp
 
 
-    def render(self):
+    def render(self, only_current=False):
         """
             Render the map to ASCII.
 
-            @return     A list of strings, each forming a single line.
+            @param only_current     If True, draw only the current connected component
+            @return                 A list of strings, each forming a single line.
         """
 
         comp = self.update_coords()
@@ -421,8 +411,8 @@ class Map:
         bridges = []
 
         # Now that we have all coordinates, we can draw the map
-        for c in range(comp):
-            comprooms = filter(lambda r: r.comp == c, self.rooms)
+        for c in (only_current and [self.current_room.comp] or range(comp)):
+            comprooms = filter(lambda r: r.comp == c, self.rooms.itervalues())
 
             minx = min([r.x for r in comprooms])
             miny = min([r.y for r in comprooms])
@@ -447,6 +437,8 @@ class Map:
                 for e in r.exits:
                     try:
                         self.mud.Direction.calc(e.name, 0, 0)
+                        if e.split:
+                            raise self.mud.Direction.NoDirectionError
                     except self.mud.Direction.NoDirectionError:
                         for i in range(len(bridges)):
                             if e.to in bridges[i]:
@@ -596,3 +588,52 @@ class Map:
 
         return allret
 
+class MapPickler:
+    class BadFileException(Exception):
+        pass
+
+    def save(self, map, file):
+        file.write("#mudblood map file\n")
+        file.write("%s\n%d\n%d\n" % (map.name, map.nextid, map.current_room.roomid))
+
+        for r in map.rooms.itervalues():
+            file.write("%d\n%s\n" % (r.roomid, r.tag))
+            file.write("%d" % len(r.exits))
+            for e in r.exits:
+                file.write(" %s %d %d" % (e.name, e.to.roomid, (e.split and 1 or 0)))
+            file.write("\n")
+
+    def load(self, mud, file):
+        def readint():
+            return int(file.readline().strip())
+        def readln():
+            return file.readline().strip()
+
+        if readln() != "#mudblood map file":
+            raise BadFileException("Magic line not found.")
+        
+        map = Map(mud)
+        try:
+            map.name = readln()
+            map.nextid = readint()
+            map.current_room = readint()
+            l = file.readline()
+            while l != "":
+                room = Room(mud)
+                room.roomid = int(l.strip())
+                room.tag = readln()
+                l = readln().split(" ")
+                for i in range(1, int(l[0])*3, 3):
+                    edge = Edge(int(l[i+1]), l[i])
+                    edge.split = (l[i+2] == "1")
+                    room.exits.append(edge)
+                map.rooms[room.roomid] = room
+                l = file.readline()
+            for r in map.rooms.itervalues():
+                for e in r.exits:
+                    e.to = map.rooms[e.to]
+            map.current_room = map.rooms[map.current_room]
+        except str(): # impossible exception
+            raise BadFileException("Malformed map file")
+        
+        return map
