@@ -59,8 +59,11 @@ class Interface:
         self.w_status = StatusWidget()
 
         self.w_map = MapWidget(self.session.mapper)
+        self.w_map_status = urwid.Text("", align="right")
 
-        self.w_frame = urwid.Frame(self.w_session, None, urwid.AttrMap(self.w_status, 'user_input'))
+        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_map_status])
+
+        self.w_frame = urwid.Frame(self.w_session, None, self.w_bottom_bar)
 
         palette = [
                 ('default', 'default', 'default'),
@@ -133,7 +136,12 @@ class Interface:
             self.w_session.append_data(ob.stderr.read() + "\n", 'error')
 
         self.w_map.update_map()
+        self.update_map_status()
         self.loop.draw_screen()
+
+    def update_map_status(self):
+        self.w_map_status.set_text("#%d (%s)" % (self.session.mapper.map.current_room.roomid, self.session.mapper.map.current_room.tag))
+        self.w_map_status._invalidate()
 
     def set_status(self, msg):
         self.w_status.set_caption(msg)
@@ -158,6 +166,8 @@ class Interface:
                 self.set_status("")
         else:
             self.set_status("Command not found.")
+
+        self.update_map_status()
 
     def cmd_quit(self):
         raise urwid.ExitMainLoop()
