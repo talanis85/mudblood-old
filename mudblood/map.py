@@ -633,7 +633,7 @@ class MapPickler:
                 for e in r.exits:
                     e.to = map.rooms[e.to]
             map.current_room = map.rooms[map.current_room]
-        except str(): # impossible exception
+        except: 
             raise BadFileException("Malformed map file")
         
         return map
