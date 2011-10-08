@@ -140,7 +140,7 @@ class Interface:
         self.loop.draw_screen()
 
     def update_map_status(self):
-        self.w_map_status.set_text("(%s) #%3d [%s]" % (self.session.mapper.map.current_room.tag, self.session.mapper.map.current_room.roomid, self.session.mapper.map.name))
+        self.w_map_status.set_text("(%s) %s #%03d [%s]" % (self.session.mapper.map.current_room.tag, self.session.mapper.mode, self.session.mapper.map.current_room.roomid, self.session.mapper.map.name))
         self.w_map_status._invalidate()
 
     def set_status(self, msg):
