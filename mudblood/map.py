@@ -235,7 +235,7 @@ class Mapper:
         self.undo()
 
     def cmd_clear(self, args):
-        self.map.rooms = {}
+        self.map = Map(self.mud)
         return "Map cleared."
 
     def cmd_nocycle(self, args):
@@ -248,6 +248,9 @@ class Mapper:
         last_room.add_exit(self.map.add(new_room), d)
         self.map.current_room = new_room
         self.last_cycle = None
+
+        self.move_stack.pop()
+        self.move_stack.append((self.map.current_room, d, 2))
 
         return "Ok."
 
