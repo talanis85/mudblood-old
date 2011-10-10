@@ -631,27 +631,26 @@ class MapPickler:
             raise BadFileException("Magic line not found.")
         
         map = Map(mud)
-        #try:
-        map.name = readln()
-        map.nextid = readint()
-        map.current_room = readint()
-        l = file.readline()
-        while l != "\n":
-            l = l.strip().split(" ")
-            room = Room(mud)
-            room.roomid = int(l[0])
-            room.tag = " ".join(l[1:])
-            map.rooms[room.roomid] = room
+        try:
+            map.name = readln()
+            map.nextid = readint()
+            map.current_room = readint()
             l = file.readline()
-        l = file.readline()
-        while l != "":
-            l = l.strip().split("|")
-            edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
-            edge.split = (l[4] == "1")
+            while l != "\n":
+                l = l.strip().split(" ")
+                room = Room(mud)
+                room.roomid = int(l[0])
+                room.tag = " ".join(l[1:])
+                map.rooms[room.roomid] = room
+                l = file.readline()
             l = file.readline()
-        map.current_room = map.rooms[map.current_room]
-        #except Exception, e: 
-        #    #raise self.BadFileException("Malformed map file")
-        #    raise e
+            while l != "":
+                l = l.strip().split("|")
+                edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
+                edge.split = (l[4] == "1")
+                l = file.readline()
+            map.current_room = map.rooms[map.current_room]
+        except:
+            raise self.BadFileException("Malformed map file")
         
         return map
