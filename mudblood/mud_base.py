@@ -58,7 +58,7 @@ class Direction:
         for ds in cls.directions:
             if d in ds[0]:
                 return ds[1]
-        raise cls.NoDirectionError()
+        return None
 
 path = ""
 

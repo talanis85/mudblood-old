@@ -98,13 +98,9 @@ class Session:
 
         self.completer = Completer()
 
-        self.input_queue = deque([])
-
         self.connected = False
         self.mode = 0
-        self.properties = {}
         self.callback = callback
-        self.fresh_data = ""
 
     def connect(self):
         try:
@@ -201,12 +197,10 @@ class Session:
                         self.connected = False
 
                     # Automapper
-                    d = self.mud.Direction.canonical(l.strip())
-                    if d:
-                        ret = self.mapper.go_to(d)
-                        if ret == MapNotification.NEW_CYCLE:
-                            self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
-                            self._do_callback(Event.INFO)
+                    ret = self.mapper.handle_input(l.strip())
+                    if ret == MapNotification.NEW_CYCLE:
+                        self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
+                        self._do_callback(Event.INFO)
 
     def write_to_stream(self, stream, data):
         if not stream in self.out:

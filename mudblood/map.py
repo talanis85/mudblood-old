@@ -39,7 +39,7 @@ class Room:
             @param room     The room to connect self to
             @param name     The (canonical) name of the direction
         """
-        if room.has_exit(self.mud.Direction.opposite(name)):
+        if self.mud.Direction.opposite(name) and room.has_exit(self.mud.Direction.opposite(name)):
             exits = ",".join(map(lambda e: e.name, room.exits))
             raise Map.MapInconsistencyError("Duplicate exit %s in %s. The other room has exits: %s" % (self.mud.Direction.opposite(name), room, exits))
         if self.has_exit(name):
@@ -47,7 +47,8 @@ class Room:
             raise Map.MapInconsistencyError("Duplicate exit %s in %s. This room has exits: %s" % (name, room, exits))
 
         self.exits.append(Edge(room, name))
-        room.exits.append(Edge(self, self.mud.Direction.opposite(name)))
+        if self.mud.Direction.opposite(name):
+            room.exits.append(Edge(self, self.mud.Direction.opposite(name)))
 
     def remove_exit(self, name):
         """
@@ -59,7 +60,8 @@ class Room:
         if e:
             self.exits.remove(e)
             oe = e.to.get_exit(self.mud.Direction.opposite(name))
-            e.to.exits.remove(oe)
+            if oe:
+                e.to.exits.remove(oe)
 
     def has_exit(self, name):
         for e in self.exits:
@@ -119,6 +121,14 @@ class Mapper:
         self.move_stack = []
         self.last_cycle = None
 
+    def handle_input(self, l):
+        if self.map.current_room.has_exit(l) or self.mode == "catchall":
+            return self.go_to(l)
+        else:
+            d = self.mud.Direction.canonical(l)
+            if d:
+                return self.go_to(d)
+
     def go_to(self, direction):
         """
             Do what is needed to go in a certain direction. When in auto-mode, creates rooms
@@ -138,7 +148,7 @@ class Mapper:
                 self.map.current_room = self.map.current_room.get_exit(direction).to
                 self.move_stack.append((self.map.current_room, direction, 0))
             else:
-                if self.mode != "auto":
+                if self.mode not in ['auto', 'catchall']:
                     return
 
                 self.map.update_coords()
@@ -171,7 +181,7 @@ class Mapper:
                 self.map.current_room = new_room
                 self.move_stack.append((self.map.current_room, direction, 2))
         else:
-            if self.mode != "auto":
+            if self.mode not in ['auto', 'catchall']:
                 return
             self.map.current_room = self.map.add(Room(self.mud))
             self.move_stack.append((self.map.current_room, direction, 2))
@@ -239,7 +249,6 @@ class Mapper:
         return "Map cleared."
 
     def cmd_nocycle(self, args):
-        # TODO: use self.undo()
         if self.last_cycle == None:
             return "There was no cycle"
 
@@ -256,20 +265,21 @@ class Mapper:
 
     def cmd_opposite(self, args):
         r, d, t = self.move_stack[-1]
-        r.remove_exit(self.mud.self.mud.Direction.opposite(d))
-        r.add_exit(self.move_stack[-2][0], args[0])
+        if self.mud.Direction.opposite(d):
+            r.remove_exit(self.mud.Direction.opposite(d))
+        r.add_exit(self.move_stack[-2][0], " ".join(args))
 
-        return "Changed way back to: " + args[0]
+        return "Changed way back to: " + " ".join(args)
 
     def cmd_mode(self, args):
         if args == []:
             return "Mapper mode: " + self.mode
 
-        if args[0] in ['fixed', 'auto', 'off']:
+        if args[0] in ['fixed', 'auto', 'catchall', 'off']:
             self.mode = args[0]
             return "Mapper mode: " + self.mode
         else:
-            return "Valid modes are: fixed, auto, off"
+            return "Valid modes are: fixed, auto, catchall, off"
 
     def cmd_move(self, args):
         if args == []:
@@ -303,6 +313,8 @@ class Mapper:
             return "Tag %s not found." % args[0]
 
     def cmd_save(self, args):
+        """Save the map to a file."""
+
         if len(args) > 0:
             self.map.name = args[0]
         if self.map.name == "":
@@ -310,25 +322,21 @@ class Mapper:
 
         with open("maps/%s" % self.map.name, "w") as f:
             MapPickler().save(self.map, f)
-            #pickle.dump(self.map, f)
         return "Ok."
 
     def cmd_load(self, args):
+        """Load a map from a file."""
+
         if args == []:
             return "Load which map?"
         with open("maps/%s" % args[0], "r") as f:
-            #self.map = pickle.load(f)
             self.map = MapPickler().load(self.mud, f)
 
         return "Map %s loaded." % args[0]
 
-    def cmd_new(self, args):
-        self.__init__(self.mud)
-        if len(args) > 0:
-            self.map.name = args[0]
-        return "New map."
-
     def cmd_cycle(self, args):
+        """Make a connection from current_room to args[0]."""
+
         if args == []:
             return "Build a cycle where?"
 
@@ -342,7 +350,14 @@ class Mapper:
         return "Tag not found."
 
     def cmd_split(self, args):
+        """Open a new connected component. The map is split between the
+           current and the last room."""
+
         r1,r2,d = self.move_stack[-2][0], self.move_stack[-1][0], self.move_stack[-1][1]
+
+        if not self.mud.Direction.opposite(d):
+            return "I can only split on standard exits."
+
         r1.get_exit(d).split = True
         r2.get_exit(self.mud.Direction.opposite(d)).split = True
         return "Ok."
@@ -603,7 +618,7 @@ class MapPickler:
             file.write("%d\n%s\n" % (r.roomid, r.tag))
             file.write("%d" % len(r.exits))
             for e in r.exits:
-                file.write(" %s %d %d" % (e.name, e.to.roomid, (e.split and 1 or 0)))
+                file.write("|%s|%d|%d" % (e.name, e.to.roomid, (e.split and 1 or 0)))
             file.write("\n")
 
     def load(self, mud, file):
@@ -625,7 +640,7 @@ class MapPickler:
                 room = Room(mud)
                 room.roomid = int(l.strip())
                 room.tag = readln()
-                l = readln().split(" ")
+                l = readln().split("|")
                 for i in range(1, int(l[0])*3, 3):
                     edge = Edge(int(l[i+1]), l[i])
                     edge.split = (l[i+2] == "1")
