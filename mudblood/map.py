@@ -8,10 +8,42 @@ class Edge:
     """
         An edge of a graph
     """
-    def __init__(self, to, name=""):
-        self.to = to
-        self.name = name
+    def __init__(self, a, a_name, b, b_name=""):
+        if b_name == "":
+            b_name = a.mud.Direction.opposite(a_name)
+
+        self.a, self.a_name, self.b, self.b_name = a, a_name, b, b_name
         self.split = False
+
+        a.exits[a_name] = self
+        b.exits[b_name] = self
+
+    def remove(self):
+        del self.a.exits[self.a_name]
+        del self.b.exits[self.b_name]
+
+    def to(self, origin):
+        if self.a == origin:
+            return self.b
+        elif self.b == origin:
+            return self.a
+        else:
+            raise Exception("%s is not assiciated with this edge." % str(origin))
+
+    def set_name(self, origin, newname):
+        if self.a == origin:
+            del origin.exits[self.a_name]
+            self.a_name = newname
+            origin.exits[newname] = self
+        elif self.b == origin:
+            del origin.exits[self.b_name]
+            self.b_name = newname
+            origin.exits[newname] = self
+        else:
+            raise Exception("%s is not assiciated with this edge." % str(origin))
+
+    def set_opposite_name(self, origin, newname):
+        self.set_name(self.to(origin), newname)
 
 class Room:
     """
@@ -23,14 +55,14 @@ class Room:
         self.roomid = -1
 
         # TODO: This should really be a set
-        self.exits = []
+        self.exits = {}
         self.x, self.y = 0, 0
         self.mark = 0
         self.comp = 0
         self.distance = 0
 
     def __repr__(self):
-        return self.tag
+        return "Room #%d, exits: %s" % (self.roomid, ",".join(self.exits.keys()))
 
     def add_exit(self, room, name):
         """
@@ -39,16 +71,12 @@ class Room:
             @param room     The room to connect self to
             @param name     The (canonical) name of the direction
         """
-        if self.mud.Direction.opposite(name) and room.has_exit(self.mud.Direction.opposite(name)):
-            exits = ",".join(map(lambda e: e.name, room.exits))
-            raise Map.MapInconsistencyError("Duplicate exit %s in %s. The other room has exits: %s" % (self.mud.Direction.opposite(name), room, exits))
-        if self.has_exit(name):
-            exits = ",".join(map(lambda e: e.name, self.exits))
-            raise Map.MapInconsistencyError("Duplicate exit %s in %s. This room has exits: %s" % (name, room, exits))
+        Edge(self, name, room)
 
-        self.exits.append(Edge(room, name))
-        if self.mud.Direction.opposite(name):
-            room.exits.append(Edge(self, self.mud.Direction.opposite(name)))
+    def get_exit(self, name):
+        if name in self.exits:
+            return self.exits[name]
+        return None
 
     def remove_exit(self, name):
         """
@@ -56,25 +84,7 @@ class Room:
             
             @param name     The direction to remove
         """
-        e = self.get_exit(name)
-        if e:
-            self.exits.remove(e)
-            oe = e.to.get_exit(self.mud.Direction.opposite(name))
-            if oe:
-                e.to.exits.remove(oe)
-
-    def has_exit(self, name):
-        for e in self.exits:
-            if e.name == name:
-                return True
-
-        return False
-
-    def get_exit(self, name):
-        for e in self.exits:
-            if e.name == name:
-                return e
-        return None
+        self.exits[name].remove()
 
     def _update_coords(self, x, y, mark, comp):
         """
@@ -93,12 +103,12 @@ class Room:
 
         sx, sy = self.x, self.y
 
-        for e in self.exits:
-            if e.to.mark == mark or e.split:
+        for n,e in self.exits.iteritems():
+            if e.to(self).mark == mark or e.split:
                 continue
             try:
-                (nx, ny) = self.mud.Direction.calc(e.name, self.x, self.y)
-                e.to._update_coords(nx, ny, mark, comp)
+                (nx, ny) = self.mud.Direction.calc(n, self.x, self.y)
+                e.to(self)._update_coords(nx, ny, mark, comp)
             except self.mud.Direction.NoDirectionError:
                 pass
 
@@ -122,7 +132,10 @@ class Mapper:
         self.last_cycle = None
 
     def handle_input(self, l):
-        if self.map.current_room.has_exit(l) or self.mode == "catchall":
+        if self.mode == "off":
+            return
+
+        if l in self.map.current_room.exits or self.mode == "catchall":
             return self.go_to(l)
         else:
             d = self.mud.Direction.canonical(l)
@@ -140,50 +153,33 @@ class Mapper:
         """
         self.last_cycle = None
 
-        if self.mode == "off":
-            return
-
-        if self.map.current_room:
-            if self.map.current_room.has_exit(direction):
-                self.map.current_room = self.map.current_room.get_exit(direction).to
-                self.move_stack.append((self.map.current_room, direction, 0))
-            else:
-                if self.mode not in ['auto', 'catchall']:
-                    return
-
-                self.map.update_coords()
-                new_room = Room(self.mud)
-
-                try:
-                    (x, y) = self.mud.Direction.calc(direction, self.map.current_room.x, self.map.current_room.y)
-
-                    for r in self.map.rooms.itervalues():
-                        if (r.x, r.y, r.comp) == (x, y, self.map.current_room.comp):
-                            self.last_cycle = (self.map.current_room, new_room, direction)
-                            try:
-                                self.map.current_room.add_exit(r, direction)
-                            except Map.MapInconsistencyError:
-                                self.last_cycle = None
-                                self.map.add(new_room)
-                                self.map.current_room.add_exit(new_room, direction)
-                                self.map.current_room = new_room
-                                self.move_stack.append((self.map.current_room, direction, 2))
-                                return
-
-                            self.map.current_room = r
-                            self.move_stack.append((self.map.current_room, direction, 1))
-                            return MapNotification.NEW_CYCLE
-                except self.mud.Direction.NoDirectionError:
-                    pass
-
-                self.map.add(new_room)
-                self.map.current_room.add_exit(new_room, direction)
-                self.map.current_room = new_room
-                self.move_stack.append((self.map.current_room, direction, 2))
+        if direction in self.map.current_room.exits:
+            self.map.current_room = self.map.current_room.exits[direction].to(self.map.current_room)
+            self.move_stack.append((self.map.current_room, direction, 0))
         else:
             if self.mode not in ['auto', 'catchall']:
                 return
-            self.map.current_room = self.map.add(Room(self.mud))
+
+            self.map.update_coords()
+            new_room = Room(self.mud)
+
+            try:
+                (x, y) = self.mud.Direction.calc(direction, self.map.current_room.x, self.map.current_room.y)
+
+                for r in self.map.rooms.itervalues():
+                    if (r.x, r.y, r.comp) == (x, y, self.map.current_room.comp):
+                        self.last_cycle = (self.map.current_room, new_room, direction)
+                        Edge(self.map.current_room, direction, r)
+                        self.map.current_room = r
+                        self.move_stack.append((self.map.current_room, direction, 1))
+                        return MapNotification.NEW_CYCLE
+
+            except self.mud.Direction.NoDirectionError:
+                pass
+
+            self.map.add(new_room)
+            Edge(self.map.current_room, direction, new_room)
+            self.map.current_room = new_room
             self.move_stack.append((self.map.current_room, direction, 2))
 
     def find_shortest_path(self, target_tag):
@@ -204,11 +200,11 @@ class Mapper:
             curdist, curroom = heappop(pq)
             curroom.mark = mark
             curroom.distance = curdist
-            for e in curroom.exits:
-                if e.to.mark != mark or e.to.distance > curdist + 1:
-                    e.to.mark = mark
-                    e.to.shortest_path = curroom.shortest_path + [e.name]
-                    heappush(pq, (curdist + 1, e.to))
+            for name,e in curroom.exits.iteritems():
+                if e.to(curroom).mark != mark or e.to(curroom).distance > curdist + 1:
+                    e.to(curroom).mark = mark
+                    e.to(curroom).shortest_path = curroom.shortest_path + [name]
+                    heappush(pq, (curdist + 1, e.to(curroom)))
 
         if target.mark == mark:
             return target.shortest_path
@@ -224,7 +220,7 @@ class Mapper:
         self.map.current_room = self.move_stack[-1][0]
 
         if t >= 1:
-            self.map.current_room.remove_exit(d)
+            self.map.current_room.exits[d].remove()
         if t == 2:
             del self.map.rooms[r.roomid]
 
@@ -253,8 +249,8 @@ class Mapper:
             return "There was no cycle"
 
         last_room, new_room, d = self.last_cycle
-        last_room.remove_exit(d)
-        last_room.add_exit(self.map.add(new_room), d)
+        last_room.exits[d].remove()
+        Edge(last_room, d, self.map.add(new_room))
         self.map.current_room = new_room
         self.last_cycle = None
 
@@ -264,30 +260,29 @@ class Mapper:
         return "Ok."
 
     def cmd_opposite(self, args):
-        r, d, t = self.move_stack[-1]
-        if self.mud.Direction.opposite(d):
-            r.remove_exit(self.mud.Direction.opposite(d))
-        r.add_exit(self.move_stack[-2][0], " ".join(args))
+        r, d = self.move_stack[-2][0], self.move_stack[-1][1]
+        r.exits[d].set_opposite_name(r, " ".join(args))
 
         return "Changed way back to: " + " ".join(args)
 
     def cmd_mode(self, args):
         if args == []:
             return "Mapper mode: " + self.mode
+        
+        valid_modes = ['fixed', 'auto', 'catchall', 'off']
 
-        if args[0] in ['fixed', 'auto', 'catchall', 'off']:
+        if args[0] in valid_modes:
             self.mode = args[0]
             return "Mapper mode: " + self.mode
         else:
-            return "Valid modes are: fixed, auto, catchall, off"
+            return "Valid modes are: " + ", ".join(valid_modes)
 
     def cmd_move(self, args):
         if args == []:
             return "Move where?"
 
-        e = self.map.current_room.get_exit(args[0])
-        if e:
-            self.map.current_room = e.to
+        if args[0] in self.map.current_room.exits:
+            self.map.current_room = self.map_current_room.exits[args[0]].to(self.map_current_room)
             return True
         else:
             return "There is no way to go " + args[0]
@@ -304,13 +299,19 @@ class Mapper:
 
     def cmd_goto(self, args):
         if args == []:
-            return "Go to which tag?"
+            return "Go where?"
         else:
-            for r in self.map.rooms.itervalues():
-                if r.tag == args[0]:
-                    self.map.current_room = r
+            if args[0][0] == "#":
+                rid = int(args[0][1:])
+                if rid in self.map.rooms:
+                    self.map.current_room = self.map.rooms[rid]
                     return "Ok."
-            return "Tag %s not found." % args[0]
+            else:
+                for r in self.map.rooms.itervalues():
+                    if r.tag == args[0]:
+                        self.map.current_room = r
+                        return "Ok."
+                return "Tag %s not found." % args[0]
 
     def cmd_save(self, args):
         """Save the map to a file."""
@@ -344,7 +345,7 @@ class Mapper:
             if r.tag == args[0]:
                 d = self.move_stack[-1][1]
                 self.undo()
-                self.map.current_room.add_exit(r, d)
+                Edge(self.map.current_room, d, r)
                 self.map.current_room = r
                 return "Ok. Built cycle to %s." % r.tag
         return "Tag not found."
@@ -353,13 +354,9 @@ class Mapper:
         """Open a new connected component. The map is split between the
            current and the last room."""
 
-        r1,r2,d = self.move_stack[-2][0], self.move_stack[-1][0], self.move_stack[-1][1]
+        r,d = self.move_stack[-2][0], self.move_stack[-1][1]
 
-        if not self.mud.Direction.opposite(d):
-            return "I can only split on standard exits."
-
-        r1.get_exit(d).split = True
-        r2.get_exit(self.mud.Direction.opposite(d)).split = True
+        r.exits[d].split = True
         return "Ok."
     
 class Map:
@@ -452,14 +449,14 @@ class Map:
                 char = ' '
                 bridge = 0
 
-                for e in r.exits:
+                for name,e in r.exits.iteritems():
                     try:
-                        self.mud.Direction.calc(e.name, 0, 0)
+                        self.mud.Direction.calc(name, 0, 0)
                         if e.split:
                             raise self.mud.Direction.NoDirectionError
                     except self.mud.Direction.NoDirectionError:
                         for i in range(len(bridges)):
-                            if e.to in bridges[i]:
+                            if e.to(r) in bridges[i]:
                                 bridges[i].add(r)
                                 bridge = i+1
                         if bridge == 0:
@@ -527,32 +524,32 @@ class Map:
 
             for r in comprooms:
                 e = r.get_exit(self.mud.Direction.SOUTH)
-                if e and e.to.comp == c:
+                if e and e.to(r).comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1
-                    if e.to.x == r.x:
+                    if e.to(r).x == r.x:
                         while cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
                             ret[cy][cx] = vert(chr(ret[cy][cx]))
                             cy += 1
-                    elif e.to.x > r.x:
+                    elif e.to(r).x > r.x:
                         ret[cy][cx] = "|"
                         cx += 1
-                        while cx < e.to.x * 3 + 1:
+                        while cx < e.to(r).x * 3 + 1:
                             ret[cy][cx] = "_"
                             cx += 1
                         cy += 1
                         ret[cy][cx] = "|"
-                    elif e.to.x < r.x:
+                    elif e.to(r).x < r.x:
                         ret[cy][cx] = "|"
                         cx -= 1
-                        while cx < e.to.x * 3 + 1:
+                        while cx < e.to(r).x * 3 + 1:
                             ret[cy][cx] = "_"
                             cx -= 1
                         cy += 1
                         ret[cy][cx] = "|"
 
                 e = r.get_exit(self.mud.Direction.EAST)
-                if e and e.to.y == r.y and e.to.comp == c:
+                if e and e.to(r).y == r.y and e.to(r).comp == c:
                     cy = r.y * 3 + 1
                     cx = r.x * 3 + 1 + 1
                     while cx < w * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
@@ -560,10 +557,10 @@ class Map:
                         cx += 1
 
                 e = r.get_exit(self.mud.Direction.SOUTHEAST)
-                if e and e.to.comp == c:
+                if e and e.to(r).comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 + 1
-                    if e.to.y-e.to.x == r.y-r.x:
+                    if e.to(r).y-e.to(r).x == r.y-r.x:
                         while cx < w * 3 + 1 and cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
                             ret[cy][cx] = diag1(chr(ret[cy][cx]))
                             cx += 1
@@ -571,20 +568,20 @@ class Map:
                     else:
                         ret[cy][cx] = "\\"
                         cx += 1
-                        while cx < e.to.x * 3 + 1:
+                        while cx < e.to(r).x * 3 + 1:
                             ret[cy][cx] = "_"
                             cx += 1
-                        while cy < e.to.y * 3 - 1:
+                        while cy < e.to(r).y * 3 - 1:
                             ret[cy][cx] = "|"
                             cy += 1
                         cy += 1
                         ret[cy][cx] = "\\"
 
                 e = r.get_exit(self.mud.Direction.SOUTHWEST)
-                if e and e.to.comp == c:
+                if e and e.to(r).comp == c:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 - 1
-                    if e.to.y+e.to.x == (r.y+r.x):
+                    if e.to(r).y+e.to(r).x == (r.y+r.x):
                         while cx >= 0 and cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
                             ret[cy][cx] = diag2(chr(ret[cy][cx]))
                             cx -= 1
@@ -592,11 +589,11 @@ class Map:
                     else:
                         ret[cy][cx] = "/"
                         cx -= 1
-                        while cx > e.to.x * 3 + 2:
+                        while cx > e.to(r).x * 3 + 2:
                             ret[cy][cx] = "_"
                             cx -= 1
                         cy += 1
-                        while cy < e.to.y * 3:
+                        while cy < e.to(r).y * 3:
                             ret[cy][cx] = "|"
                             cy += 1
                         ret[cy][cx] = "/"
@@ -615,11 +612,14 @@ class MapPickler:
         file.write("%s\n%d\n%d\n" % (map.name, map.nextid, map.current_room.roomid))
 
         for r in map.rooms.itervalues():
-            file.write("%d\n%s\n" % (r.roomid, r.tag))
-            file.write("%d" % len(r.exits))
-            for e in r.exits:
-                file.write("|%s|%d|%d" % (e.name, e.to.roomid, (e.split and 1 or 0)))
-            file.write("\n")
+            file.write("%d %s\n" % (r.roomid, r.tag))
+        file.write("\n")
+        edges = set()
+        for r in map.rooms.itervalues():
+            for e in r.exits.itervalues():
+                edges.add(e)
+        for e in edges:
+            file.write("%d|%s|%d|%s|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0)))
 
     def load(self, mud, file):
         def readint():
@@ -631,27 +631,27 @@ class MapPickler:
             raise BadFileException("Magic line not found.")
         
         map = Map(mud)
-        try:
-            map.name = readln()
-            map.nextid = readint()
-            map.current_room = readint()
+        #try:
+        map.name = readln()
+        map.nextid = readint()
+        map.current_room = readint()
+        l = file.readline()
+        while l != "\n":
+            l = l.strip().split(" ")
+            room = Room(mud)
+            room.roomid = int(l[0])
+            room.tag = " ".join(l[1:])
+            map.rooms[room.roomid] = room
             l = file.readline()
-            while l != "":
-                room = Room(mud)
-                room.roomid = int(l.strip())
-                room.tag = readln()
-                l = readln().split("|")
-                for i in range(1, int(l[0])*3, 3):
-                    edge = Edge(int(l[i+1]), l[i])
-                    edge.split = (l[i+2] == "1")
-                    room.exits.append(edge)
-                map.rooms[room.roomid] = room
-                l = file.readline()
-            for r in map.rooms.itervalues():
-                for e in r.exits:
-                    e.to = map.rooms[e.to]
-            map.current_room = map.rooms[map.current_room]
-        except: 
-            raise BadFileException("Malformed map file")
+        l = file.readline()
+        while l != "":
+            l = l.strip().split("|")
+            edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
+            edge.split = (l[4] == "1")
+            l = file.readline()
+        map.current_room = map.rooms[map.current_room]
+        #except Exception, e: 
+        #    #raise self.BadFileException("Malformed map file")
+        #    raise e
         
         return map

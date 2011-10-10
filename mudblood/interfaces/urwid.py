@@ -110,7 +110,7 @@ class Interface:
                 self.w_status.set_caption("")
                 self.w_status.set_edit_text("")
                 self.w_frame.set_focus('body')
-            elif k == options.prefix:
+            elif k == options.prefix and self.w_frame.focus_part != 'footer':
                 self.w_status.set_caption(options.prefix)
                 self.w_frame.set_focus('footer')
             else:
@@ -398,7 +398,7 @@ class MapWidget(urwid.WidgetWrap):
     def update_map(self):
         if self.mapper.map.current_room:
             try:
-                self.text.set_text("\n".join(self.mapper.map.render(True)))
+                self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + str(self.mapper.map.current_room))
             except Exception, e:
                 global master
                 master.w_session.append_data(traceback.format_exc(), 'error')
