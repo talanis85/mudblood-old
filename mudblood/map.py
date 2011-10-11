@@ -11,6 +11,8 @@ class Edge:
     def __init__(self, a, a_name, b, b_name=""):
         if b_name == "":
             b_name = a.mud.Direction.opposite(a_name)
+            if not b_name:
+                b_name = a_name
 
         self.a, self.a_name, self.b, self.b_name = a, a_name, b, b_name
         self.split = False
@@ -132,7 +134,7 @@ class Mapper:
         self.last_cycle = None
 
     def handle_input(self, l):
-        if self.mode == "off":
+        if l == "" or self.mode == "off":
             return
 
         if l in self.map.current_room.exits or self.mode == "catchall":
@@ -528,7 +530,7 @@ class Map:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1
                     if e.to(r).x == r.x:
-                        while cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
+                        while cy < h * 3 + 1 and chr(ret[cy][cx]) in [' ', '-', '/', '\\', '+']:
                             ret[cy][cx] = vert(chr(ret[cy][cx]))
                             cy += 1
                     elif e.to(r).x > r.x:
@@ -552,7 +554,7 @@ class Map:
                 if e and e.to(r).y == r.y and e.to(r).comp == c:
                     cy = r.y * 3 + 1
                     cx = r.x * 3 + 1 + 1
-                    while cx < w * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
+                    while cx < w * 3 + 1 and chr(ret[cy][cx]) in [' ', '-', '/', '\\', '+']:
                         ret[cy][cx] = horiz(chr(ret[cy][cx]))
                         cx += 1
 
@@ -561,7 +563,7 @@ class Map:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 + 1
                     if e.to(r).y-e.to(r).x == r.y-r.x:
-                        while cx < w * 3 + 1 and cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
+                        while cx < w * 3 + 1 and cy < h * 3 + 1 and chr(ret[cy][cx]) in [' ', '-', '/', '\\', '+']:
                             ret[cy][cx] = diag1(chr(ret[cy][cx]))
                             cx += 1
                             cy += 1
@@ -582,7 +584,7 @@ class Map:
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 - 1
                     if e.to(r).y+e.to(r).x == (r.y+r.x):
-                        while cx >= 0 and cy < h * 3 + 1 and chr(ret[cy][cx]) not in ['#', 'X']:
+                        while cx >= 0 and cy < h * 3 + 1 and chr(ret[cy][cx]) in [' ', '-', '/', '\\', '+']:
                             ret[cy][cx] = diag2(chr(ret[cy][cx]))
                             cx -= 1
                             cy += 1
