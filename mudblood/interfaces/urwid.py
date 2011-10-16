@@ -60,8 +60,9 @@ class Interface:
 
         self.w_map = MapWidget(self.session.mapper)
         self.w_map_status = urwid.Text("", align="right")
+        self.w_user_status = urwid.Text("", align="right")
 
-        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_map_status])
+        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_user_status, self.w_map_status])
 
         self.w_frame = urwid.Frame(self.w_session, None, self.w_bottom_bar)
 
@@ -134,6 +135,8 @@ class Interface:
             self.w_session.append_data("Session started.\n", 'info')
         elif typ == Event.ERROR:
             self.w_session.append_data(ob.stderr.read() + "\n", 'error')
+        elif typ == Event.STATUS:
+            self.w_user_status.set_text(ob.user_status)
 
         self.w_map.update_map()
         self.update_map_status()
@@ -264,7 +267,8 @@ class SessionWidget(urwid.BoxWidget):
             x = 0
             for l in self.lines[-1]:
                 x += len(l[1])
-            c.overlay(self.input_attr.render((size[0]-x,), focus), x, size[1]-1)
+            r = self.input_attr.rows((size[0]-x,), focus)
+            c.overlay(self.input_attr.render((size[0]-x,), focus), x, size[1]-r)
 
         return c
 

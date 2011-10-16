@@ -70,6 +70,7 @@ class Event:
     ERROR       = 3
     CONNECTED   = 4
     CLOSED      = 5
+    STATUS      = 6
 
 class Session:
     """
@@ -93,6 +94,8 @@ class Session:
         self.stderr = self.out[0]
         self.stdin = IOStream()
         self.info = IOStream()
+
+        self.user_status = ""
 
         self.mapper = Mapper(mud)
 
@@ -207,6 +210,10 @@ class Session:
             self.out[stream] = IOStream()
         self.out[stream].write(data)
         self._do_callback(Event.STDIO)
+
+    def set_user_status(self, new_status):
+        self.user_status = new_status
+        self._do_callback(Event.STATUS)
 
     def command(self, cmd, args):
         if hasattr(self.mud, "cmd_" + cmd):
