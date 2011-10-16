@@ -474,8 +474,8 @@ class Map:
                 r.y -= miny
 
             ret = []
-            for i in range((h+1) * 3):
-                ret.append(bytearray("   " * (w+1), "ascii"))
+            for i in range((h+1) * 3 + 1):
+                ret.append(bytearray("   " * (w+1+1), "ascii"))
 
             for r in comprooms:
                 char = ' '
@@ -555,6 +555,23 @@ class Map:
 
 
             for r in comprooms:
+                for e in r.exits:
+                    if e == self.mud.Direction.SOUTH:
+                        ret[r.y*3+2][r.x*3+1] = '|'
+                    elif e == self.mud.Direction.SOUTHEAST:
+                        ret[r.y*3+2][r.x*3+2] = '\\'
+                    elif e == self.mud.Direction.EAST:
+                        ret[r.y*3+1][r.x*3+2] = '-'
+                    elif e == self.mud.Direction.NORTHEAST:
+                        ret[r.y*3][r.x*3+2] = '/'
+                    elif e == self.mud.Direction.NORTH:
+                        ret[r.y*3][r.x*3+1] = '|'
+                    elif e == self.mud.Direction.NORTHWEST:
+                        ret[r.y*3][r.x*3] = '\\'
+                    elif e == self.mud.Direction.WEST:
+                        ret[r.y*3+1][r.x*3] = '-'
+                    elif e == self.mud.Direction.SOUTHWEST:
+                        ret[r.y*3+2][r.x*3] = '/'
                 e = r.get_exit(self.mud.Direction.SOUTH)
                 if e and e.to(r).comp == c:
                     cy = r.y * 3 + 1 + 1
