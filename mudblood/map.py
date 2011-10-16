@@ -32,15 +32,34 @@ class Edge:
         else:
             raise Exception("%s is not assiciated with this edge." % str(origin))
 
+    def set_to(self, origin, to):
+        if self.a == origin:
+            del self.b.exits[self.b_name]
+            self.b = to
+            self.b.exits[self.b_name] = self
+        elif self.b == origin:
+            del self.a.exits[self.a_name]
+            self.a = to
+            self.a.exits[self.a_name] = self
+        else:
+            raise Exception("%s is not assiciated with this edge." % str(origin))
+
     def set_name(self, origin, newname):
+        """Change the name of an exit.
+
+           An empty string means: Remove the exit in one direction (i.e.
+           make the Edge one-way."""
+
         if self.a == origin:
             del origin.exits[self.a_name]
             self.a_name = newname
-            origin.exits[newname] = self
+            if newname != "":
+                origin.exits[newname] = self
         elif self.b == origin:
             del origin.exits[self.b_name]
             self.b_name = newname
-            origin.exits[newname] = self
+            if newname != "":
+                origin.exits[newname] = self
         else:
             raise Exception("%s is not assiciated with this edge." % str(origin))
 
@@ -241,6 +260,7 @@ class Mapper:
 
     def cmd_undo(self, args):
         self.undo()
+        return "Ok."
 
     def cmd_clear(self, args):
         self.map = Map(self.mud)
@@ -266,6 +286,16 @@ class Mapper:
         r.exits[d].set_opposite_name(r, " ".join(args))
 
         return "Changed way back to: " + " ".join(args)
+
+    def cmd_rmexit(self, args):
+        if args == []:
+            return "Which exit?"
+
+        if args[0] in self.map.current_room.exits:
+            self.map.current_room.exits[args[0]].set_name(self.map.current_room, "")
+            return "Ok."
+        else:
+            return "No such exit."
 
     def cmd_mode(self, args):
         if args == []:
@@ -345,9 +375,9 @@ class Mapper:
 
         for r in self.map.rooms.itervalues():
             if r.tag == args[0]:
-                d = self.move_stack[-1][1]
-                self.undo()
-                Edge(self.map.current_room, d, r)
+                for e in self.map.current_room.exits.values():
+                    e.set_to(e.to(self.map.current_room), r)
+                del self.map.rooms[self.map.current_room.roomid]
                 self.map.current_room = r
                 return "Ok. Built cycle to %s." % r.tag
         return "Tag not found."
