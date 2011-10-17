@@ -324,12 +324,18 @@ class SessionWidget(urwid.BoxWidget):
         if attr != '00':
             self.current_attr = attr
 
+        if len(self.lines) > 0 and self.lines[-1] != []:
+            self.lines.append([])
+
         (a,b,c) = data.partition("\n")
         self.lines[-1].extend(self.parse_attributes(a))
         while b == "\n":
             self.lines.append([])
             (a,b,c) = c.partition("\n")
             self.lines[-1].extend(self.parse_attributes(a))
+
+        if self.lines[-1] == []:
+            self.lines.pop()
 
         if not self.scrolling:
             self.text.set_focus(len(self.lines)-1)
