@@ -43,7 +43,7 @@ def main():
             print "MUD definition not found"
             sys.exit(1)
     elif len(args) == 2:
-        mud = __import__("mud_base")
+        mud = __import__("mudblood.mud_base", globals(), locals(), [], -1).mud_base
         mud.host = args[0]
         mud.port = int(args[1])
     else:
