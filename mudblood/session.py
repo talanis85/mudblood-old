@@ -193,7 +193,7 @@ class Session:
 
                 if l:
                     try:
-                        self.telnet.write(l)
+                        self.telnet.write(str(l))
                     except IOError, e:
                         self.stderr.writeln("Connection closed.")
                         self._do_callback(Event.ERROR)

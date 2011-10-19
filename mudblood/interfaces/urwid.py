@@ -258,7 +258,7 @@ class SessionWidget(urwid.BoxWidget):
         self.scrolling = False
         self.session = session
         self.data = ""
-        self.lines = [[]]
+        self.lines = [[('default','')]]
 
         self.completer = self.session.completer
         self.completer_state = 0
@@ -343,14 +343,10 @@ class SessionWidget(urwid.BoxWidget):
         if attr != '00':
             self.current_attr = attr
 
-        for l in data.split("\n"):
-            self.lines[-1].extend(self.parse_attributes(l))
-            if self.lines[-1] == []:
-                self.lines[-1] = [('default', '')]
-            self.lines.append([])
-
-        if self.lines[-1] == []:
-            self.lines[-1] = [('default', '')]
+        for l in data.splitlines(True):
+            self.lines[-1].extend(self.parse_attributes(l.strip('\n')))
+            if l[-1] == '\n':
+                self.lines.append([('default', '')])
 
         if not self.scrolling:
             self.text.set_focus(len(self.lines)-1)
