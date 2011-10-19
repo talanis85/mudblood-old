@@ -354,7 +354,6 @@ class SessionWidget(urwid.BoxWidget):
         self.current_attr = last_attr
 
         self._invalidate()
-        self.text._invalidate()
 
         self.data_lock.release()
 

@@ -55,7 +55,7 @@ class IOStream:
         """
         self.lock.acquire()
         self.out += data
-        self.lock.notify_all();
+        self.lock.notify();
         self.lock.release()
 
     def writeln(self, data):
