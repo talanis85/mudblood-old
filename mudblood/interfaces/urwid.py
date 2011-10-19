@@ -19,6 +19,10 @@ master = None
 
 
 class ThreadSafeMainLoop(urwid.MainLoop):
+
+    """We want to call draw_screen from different threads, so we better
+       use a lock."""
+
     def __init__(self, widget, palette=[], screen=None, handle_mouse=True, input_filter=None, unhandled_input=None, event_loop=None):
         self.draw_lock = threading.Lock()
 
@@ -33,6 +37,10 @@ class ThreadSafeMainLoop(urwid.MainLoop):
 
 
 class DynamicOverlay(urwid.Overlay):
+
+    """An extension of urwid.Overlay that forwards keystrokes to top_w
+       if it exists or bottom_w otherwise."""
+
     def selectable(self):
         return self.top_w.selectable() or self.bottom_w.selectable()
 
@@ -66,6 +74,7 @@ class Interface:
 
         self.w_frame = urwid.Frame(self.w_session, None, self.w_bottom_bar)
 
+        # TODO: Make user_input, info and error customizable
         palette = [
                 ('default', 'default', 'default'),
                 ('user_input', 'brown', 'default'),
@@ -82,7 +91,6 @@ class Interface:
                 ("70", 'dark cyan', 'default'),
                 ("80", 'white', 'default'),
 
-                # Unfortunately no 'bold' support in curses_display
                 ("01", 'default', 'default'),
                 ("11", 'black', 'default'),
                 ("21", 'light red', 'default'),
@@ -95,11 +103,12 @@ class Interface:
                 ]
 
         screen = urwid.curses_display.Screen()
-
-        self.loop = ThreadSafeMainLoop(self.w_frame, palette, screen, handle_mouse=False, input_filter=self.master_input)
-
+        self.loop = ThreadSafeMainLoop(self.w_frame,
+                                       palette,
+                                       screen,
+                                       handle_mouse=False,
+                                       input_filter=self.master_input)
         self.session.connect()
-
         self.loop.run()
 
     def master_input(self, keys, raw):
@@ -139,18 +148,29 @@ class Interface:
             self.w_user_status.set_text(ob.user_status)
 
         self.w_map.update_map()
+
+        # TODO: Move status management to mud def file
         self.update_map_status()
         self.loop.draw_screen()
 
     def update_map_status(self):
-        self.w_map_status.set_text("(%s) %s #%03d [%s]" % (self.session.mapper.map.current_room.tag, self.session.mapper.mode, self.session.mapper.map.current_room.roomid, self.session.mapper.map.name))
+        # TODO: remove. See session_callback
+        self.w_map_status.set_text("(%s) %s #%03d [%s]" %
+                (self.session.mapper.map.current_room.tag,
+                 self.session.mapper.mode,
+                 self.session.mapper.map.current_room.roomid,
+                 self.session.mapper.map.name))
         self.w_map_status._invalidate()
 
     def set_status(self, msg):
+        # TODO: remove. See session_callback
         self.w_status.set_caption(msg)
 
     def start_overlay(self, widget):
-        self.w_overlay = DynamicOverlay(urwid.LineBox(widget), self.w_session, 'center', ('relative', 80), 'middle', ('relative', 80))
+        self.w_overlay = DynamicOverlay(urwid.LineBox(widget),
+                                        self.w_session,
+                                        'center', ('relative', 80),
+                                        'middle', ('relative', 80))
         self.w_frame.set_body(self.w_overlay)
 
     def end_overlay(self):
@@ -235,9 +255,7 @@ class SessionWidget(urwid.BoxWidget):
 
     def __init__(self, session):
         self.data_lock = threading.Lock()
-
         self.scrolling = False
-
         self.session = session
         self.data = ""
         self.lines = [[]]
@@ -251,10 +269,9 @@ class SessionWidget(urwid.BoxWidget):
         
         self.input = urwid.Edit("")
         self.input_attr = urwid.AttrMap(self.input, 'user_input')
+        self.text = self.SessionListBox(self.SessionList(self))
 
         self.current_attr = "00"
-
-        self.text = self.SessionListBox(self.SessionList(self))
 
     def render(self, size, focus=False):
         c = urwid.CompositeCanvas(urwid.SolidCanvas(" ", size[0], size[1]))
@@ -278,7 +295,6 @@ class SessionWidget(urwid.BoxWidget):
     def keypress(self, size, key):
         ret = None
 
-        self.scrolling = False
         if key == 'enter':
             self.append_data(self.input.get_edit_text() + "\n", 'user_input')
             t = self.input.get_edit_text()
@@ -304,7 +320,6 @@ class SessionWidget(urwid.BoxWidget):
             self.input.set_edit_text(self.history[-self.history_pos])
             self.input.set_edit_pos(10000)
         elif key == 'page up' or key == 'page down':
-            self.scrolling = True
             self.text.keypress(size, key)
         else:
             self.text.set_focus(len(self.lines)-1)
@@ -318,6 +333,10 @@ class SessionWidget(urwid.BoxWidget):
         return ret
 
     def append_data(self, data, attr='00', redraw=False):
+        scroll = False
+        if self.text.get_focus()[1] == len(self.lines)-1:
+            scroll = True
+
         self.data_lock.acquire()
 
         last_attr = self.current_attr
@@ -390,22 +409,7 @@ class MapWidget(urwid.WidgetWrap):
 
         self.update_map()
 
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        if key == "f2":
-            if self.mapper.map.current_room:
-                self.mapper.map.current_room.preferred_correction = (self.mapper.map.current_room.preferred_correction + 1) % 9
-                self.update_map()
-        else:
-            return key
-
     def update_map(self):
         if self.mapper.map.current_room:
-            try:
-                self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + str(self.mapper.map.current_room))
-            except Exception, e:
-                global master
-                master.w_session.append_data(traceback.format_exc(), 'error')
+            self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + str(self.mapper.map.current_room))
             self._invalidate()
