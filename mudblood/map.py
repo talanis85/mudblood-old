@@ -391,6 +391,28 @@ class Mapper:
         r.exits[d].split = True
         return "Ok."
     
+    def cmd_merge(self, args):
+        """Merge this map with another map.
+           Arguments: Name of other map
+                      Roomid or tag of a room in the other map
+           The current room will be joined with the room in the other map."""
+        
+        other = None
+        with open("maps/%s" % args[0], "r") as f:
+            other = MapPickler().load(self.mud, f)
+
+        room_to_merge = self.map.find_room(args[1])
+
+        for r in other.rooms.itervalues():
+            self.map.add(r)
+
+        for e in self.map.current_room.exits.values():
+            e.set_to(e.to(self.map.current_room), r)
+        del self.map.rooms[self.map.current_room.roomid]
+        self.map.current_room = r
+
+        return "Merge successful."
+    
 class Map:
     """
         The Map
@@ -424,6 +446,21 @@ class Map:
         self.rooms[self.nextid] = room;
         self.nextid += 1
         return room
+    
+    def find_room(self, room):
+        r = None
+        if type(room) == str:
+            if room[0] == "#":
+                r = self.rooms[int(room[1:])]
+            else:
+                for ro in self.rooms.itervalues():
+                    if ro.tag == room:
+                        r = ro
+                        break
+        elif type(room) == int:
+            r = self.rooms[room]
+
+        return r
 
     def update_coords(self):
         if self.rooms == {}:
