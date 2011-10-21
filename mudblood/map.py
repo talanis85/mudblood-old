@@ -360,7 +360,7 @@ class Mapper:
         else:
             r = self.find_room(args[0])
             if r:
-                self.current_room = r
+                self.map.current_room = r
                 return "Ok."
             else:
                 return "Tag %s not found." % args[0]
