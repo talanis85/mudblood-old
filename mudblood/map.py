@@ -203,15 +203,31 @@ class Mapper:
             self.map.current_room = new_room
             self.move_stack.append((self.map.current_room, direction, 2))
 
-    def find_shortest_path(self, target_tag):
-        from heapq import heappush,heappop
+    def find_room(self, room):
+        """
+           Address a specific room.
+           
+           @param room  Either a a string "tag" or "#roomnumber" or an integer.
+           @return      The room object or None if not found.
+        """
+        r = None
+        if type(room) == str:
+            if room[0] == "#":
+                r = self.map.rooms[int(room[1:])]
+            else:
+                for ro in self.map.rooms.itervalues():
+                    if ro.tag == room:
+                        r = ro
+                        break
+        elif type(room) == int:
+            r = self.map.rooms[room]
 
-        target = None
-        for r in self.map.rooms.itervalues():
-            if r.tag == target_tag:
-                target = r
-        if not target:
-            return None
+        return r
+
+    def find_shortest_path(self, target):
+        """Shortest path from current_room to target."""
+
+        from heapq import heappush,heappop
 
         self.map.current_room.shortest_path = []
         pq = [(0, self.map.current_room)]
@@ -231,6 +247,15 @@ class Mapper:
             return target.shortest_path
         else:
             return None
+
+    def join(self, other):
+        """Join current_room with other.
+           The other room is kept."""
+
+        for e in self.map.current_room.exits.values():
+            e.set_to(e.to(self.map.current_room), other)
+        del self.map.rooms[self.map.current_room.roomid]
+        self.map.current_room = other
 
     def undo(self):
         """
@@ -333,16 +358,11 @@ class Mapper:
         if args == []:
             return "Go where?"
         else:
-            if args[0][0] == "#":
-                rid = int(args[0][1:])
-                if rid in self.map.rooms:
-                    self.map.current_room = self.map.rooms[rid]
-                    return "Ok."
+            r = self.find_room(args[0])
+            if r:
+                self.current_room = r
+                return "Ok."
             else:
-                for r in self.map.rooms.itervalues():
-                    if r.tag == args[0]:
-                        self.map.current_room = r
-                        return "Ok."
                 return "Tag %s not found." % args[0]
 
     def cmd_save(self, args):
@@ -373,14 +393,12 @@ class Mapper:
         if args == []:
             return "Build a cycle where?"
 
-        for r in self.map.rooms.itervalues():
-            if r.tag == args[0]:
-                for e in self.map.current_room.exits.values():
-                    e.set_to(e.to(self.map.current_room), r)
-                del self.map.rooms[self.map.current_room.roomid]
-                self.map.current_room = r
-                return "Ok. Built cycle to %s." % r.tag
-        return "Tag not found."
+        other = self.find_room(args[0])
+        if other:
+            self.join(other)
+            return "Ok. Built cycle to %s." % r.tag
+        else:
+            return "No such room."
 
     def cmd_split(self, args):
         """Open a new connected component. The map is split between the
@@ -401,15 +419,12 @@ class Mapper:
         with open("maps/%s" % args[0], "r") as f:
             other = MapPickler().load(self.mud, f)
 
-        room_to_merge = self.map.find_room(args[1])
+        room_to_merge = self.find_room(args[1])
 
         for r in other.rooms.itervalues():
             self.map.add(r)
 
-        for e in self.map.current_room.exits.values():
-            e.set_to(e.to(self.map.current_room), r)
-        del self.map.rooms[self.map.current_room.roomid]
-        self.map.current_room = r
+        self.join(room_to_merge)
 
         return "Merge successful."
     
@@ -447,21 +462,6 @@ class Map:
         self.nextid += 1
         return room
     
-    def find_room(self, room):
-        r = None
-        if type(room) == str:
-            if room[0] == "#":
-                r = self.rooms[int(room[1:])]
-            else:
-                for ro in self.rooms.itervalues():
-                    if ro.tag == room:
-                        r = ro
-                        break
-        elif type(room) == int:
-            r = self.rooms[room]
-
-        return r
-
     def update_coords(self):
         if self.rooms == {}:
             return 0

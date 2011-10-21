@@ -60,6 +60,16 @@ class Direction:
                 return ds[1]
         return None
 
+def get_middle_status(session):
+    return ""
+
+def get_right_status(session):
+    return "(%s) %s #%03d [%s]" % (
+             session.mapper.map.current_room.tag,
+             session.mapper.mode,
+             session.mapper.map.current_room.roomid,
+             session.mapper.map.name)
+
 path = ""
 
 host = "localhost"

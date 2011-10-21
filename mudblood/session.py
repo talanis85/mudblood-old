@@ -211,10 +211,6 @@ class Session:
         self.out[stream].write(data)
         self._do_callback(Event.STDIO)
 
-    def set_user_status(self, new_status):
-        self.user_status = new_status
-        self._do_callback(Event.STATUS)
-
     def command(self, cmd, args):
         if hasattr(self.mud, "cmd_" + cmd):
             return getattr(self.mud, "cmd_" + cmd)(self, *args)
@@ -227,7 +223,7 @@ class Session:
                 return None
 
     def cmd_walk(self, tag):
-        path = self.mapper.find_shortest_path(tag)
+        path = self.mapper.find_shortest_path(self.mapper.find_room(tag))
 
         if path:
             self.stdin.writeln("\n".join(path))

@@ -67,10 +67,10 @@ class Interface:
         self.w_status = StatusWidget()
 
         self.w_map = MapWidget(self.session.mapper)
-        self.w_map_status = urwid.Text("", align="right")
-        self.w_user_status = urwid.Text("", align="right")
+        self.w_right_status = urwid.Text("", align="right")
+        self.w_middle_status = urwid.Text("", align="right")
 
-        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_user_status, self.w_map_status])
+        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_middle_status, self.w_right_status])
 
         self.w_frame = urwid.Frame(self.w_session, None, self.w_bottom_bar)
 
@@ -149,21 +149,16 @@ class Interface:
 
         self.w_map.update_map()
 
-        # TODO: Move status management to mud def file
-        self.update_map_status()
+        self.update_status()
         self.loop.draw_screen()
 
-    def update_map_status(self):
-        # TODO: remove. See session_callback
-        self.w_map_status.set_text("(%s) %s #%03d [%s]" %
-                (self.session.mapper.map.current_room.tag,
-                 self.session.mapper.mode,
-                 self.session.mapper.map.current_room.roomid,
-                 self.session.mapper.map.name))
-        self.w_map_status._invalidate()
+    def update_status(self):
+        self.w_middle_status.set_text(self.mud.get_middle_status(self.session))
+        self.w_middle_status._invalidate()
+        self.w_right_status.set_text(self.mud.get_right_status(self.session))
+        self.w_right_status._invalidate()
 
     def set_status(self, msg):
-        # TODO: remove. See session_callback
         self.w_status.set_caption(msg)
 
     def start_overlay(self, widget):
@@ -190,7 +185,7 @@ class Interface:
         else:
             self.set_status("Command not found.")
 
-        self.update_map_status()
+        self.update_status()
 
     def cmd_quit(self):
         raise urwid.ExitMainLoop()
