@@ -381,7 +381,9 @@ class StatusWidget(urwid.Edit):
 
             words = self.get_edit_text().split()
 
-            master.command(words[0], words[1:])
+            if words != "":
+                master.command(words[0], words[1:])
+
             self.set_edit_text("")
             master.w_frame.set_focus('body')
         else:

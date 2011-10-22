@@ -339,7 +339,7 @@ class Mapper:
             return "Move where?"
 
         if args[0] in self.map.current_room.exits:
-            self.map.current_room = self.map_current_room.exits[args[0]].to(self.map_current_room)
+            self.map.current_room = self.map_current_room.exits[args[0]].to(self.map.current_room)
             return True
         else:
             return "There is no way to go " + args[0]
