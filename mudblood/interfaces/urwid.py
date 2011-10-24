@@ -172,18 +172,21 @@ class Interface:
         self.w_frame.set_body(self.w_session)
 
     def command(self, cmd, args):
-        if hasattr(self, "cmd_" + cmd):
-            ret = getattr(self, "cmd_" + cmd)(*args)
-        else:
-            ret = self.session.command(cmd, args)
-
-        if ret:
-            if isinstance(ret, str):
-                self.set_status(ret)
+        try:
+            if hasattr(self, "cmd_" + cmd):
+                ret = getattr(self, "cmd_" + cmd)(*args)
             else:
-                self.set_status("")
-        else:
-            self.set_status("Command not found.")
+                ret = self.session.command(cmd, args)
+
+            if ret:
+                if isinstance(ret, str):
+                    self.set_status(ret)
+                else:
+                    self.set_status("")
+            else:
+                self.set_status("Command not found.")
+        except TypeError:
+            self.set_status("Syntax Error")
 
         self.update_status()
 

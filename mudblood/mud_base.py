@@ -70,6 +70,9 @@ def get_right_status(session):
              session.mapper.map.current_room.roomid,
              session.mapper.map.name)
 
+import os
+mapdir = os.path.expanduser("~/.config/mudblood/maps")
+
 path = ""
 
 host = "localhost"

@@ -1,7 +1,6 @@
-# $Id$
-
 import time
 import pickle
+import threading
 from operator import attrgetter
 
 class Edge:
@@ -9,6 +8,10 @@ class Edge:
         An edge of a graph
     """
     def __init__(self, a, a_name, b, b_name=""):
+        assert a
+        assert a_name
+        assert b
+
         if b_name == "":
             b_name = a.mud.Direction.opposite(a_name)
             if not b_name:
@@ -25,6 +28,8 @@ class Edge:
         del self.b.exits[self.b_name]
 
     def to(self, origin):
+        assert origin
+
         if self.a == origin:
             return self.b
         elif self.b == origin:
@@ -33,6 +38,9 @@ class Edge:
             raise Exception("%s is not assiciated with this edge." % str(origin))
 
     def set_to(self, origin, to):
+        assert origin
+        assert to
+
         if self.a == origin:
             del self.b.exits[self.b_name]
             self.b = to
@@ -49,6 +57,8 @@ class Edge:
 
            An empty string means: Remove the exit in one direction (i.e.
            make the Edge one-way."""
+
+        assert origin
 
         if self.a == origin:
             del origin.exits[self.a_name]
@@ -75,7 +85,6 @@ class Room:
         self.mud = mud
         self.roomid = -1
 
-        # TODO: This should really be a set
         self.exits = {}
         self.x, self.y = 0, 0
         self.mark = 0
@@ -130,7 +139,7 @@ class Room:
             try:
                 (nx, ny) = self.mud.Direction.calc(n, self.x, self.y)
                 e.to(self)._update_coords(nx, ny, mark, comp)
-            except self.mud.Direction.NoDirectionError:
+            except: #self.mud.Direction.NoDirectionError:
                 pass
 
 # ---
@@ -172,6 +181,8 @@ class Mapper:
             @return             None or a MapNotification to indicate a special condition.
                                 (such as a new cycle)
         """
+        self.map.lock.acquire()
+
         self.last_cycle = None
 
         if direction in self.map.current_room.exits:
@@ -179,9 +190,9 @@ class Mapper:
             self.move_stack.append((self.map.current_room, direction, 0))
         else:
             if self.mode not in ['auto', 'catchall']:
+                self.map.lock.release()
                 return
 
-            self.map.update_coords()
             new_room = Room(self.mud)
 
             try:
@@ -193,6 +204,10 @@ class Mapper:
                         Edge(self.map.current_room, direction, r)
                         self.map.current_room = r
                         self.move_stack.append((self.map.current_room, direction, 1))
+
+                        self.map.update_coords()
+
+                        self.map.lock.release()
                         return MapNotification.NEW_CYCLE
 
             except self.mud.Direction.NoDirectionError:
@@ -203,6 +218,10 @@ class Mapper:
             self.map.current_room = new_room
             self.move_stack.append((self.map.current_room, direction, 2))
 
+            self.map.update_coords()
+
+        self.map.lock.release()
+
     def find_room(self, room):
         """
            Address a specific room.
@@ -210,22 +229,14 @@ class Mapper:
            @param room  Either a a string "tag" or "#roomnumber" or an integer.
            @return      The room object or None if not found.
         """
-        r = None
-        if type(room) == str:
-            if room[0] == "#":
-                r = self.map.rooms[int(room[1:])]
-            else:
-                for ro in self.map.rooms.itervalues():
-                    if ro.tag == room:
-                        r = ro
-                        break
-        elif type(room) == int:
-            r = self.map.rooms[room]
-
-        return r
+        return self.map[room]
 
     def find_shortest_path(self, target):
         """Shortest path from current_room to target."""
+
+        assert target
+
+        self.map.lock.acquire()
 
         from heapq import heappush,heappop
 
@@ -244,31 +255,38 @@ class Mapper:
                     heappush(pq, (curdist + 1, e.to(curroom)))
 
         if target.mark == mark:
+            self.map.lock.release()
             return target.shortest_path
         else:
+            self.map.lock.release()
             return None
 
     def join(self, other):
         """Join current_room with other.
            The other room is kept."""
 
-        for e in self.map.current_room.exits.values():
-            e.set_to(e.to(self.map.current_room), other)
-        del self.map.rooms[self.map.current_room.roomid]
-        self.map.current_room = other
+        with self.map.lock:
+            for e in self.map.current_room.exits.values():
+                e.set_to(e.to(self.map.current_room), other)
+            del self.map.rooms[self.map.current_room.roomid]
+            self.map.current_room = other
 
     def undo(self):
         """
             Undo the last action.
         """
-        r, d, t = self.move_stack.pop()
+        if len(self.move_stack) < 2:
+            return None
 
-        self.map.current_room = self.move_stack[-1][0]
+        with self.map.lock:
+            r, d, t = self.move_stack.pop()
 
-        if t >= 1:
-            self.map.current_room.exits[d].remove()
-        if t == 2:
-            del self.map.rooms[r.roomid]
+            self.map.current_room = self.move_stack[-1][0]
+
+            if t >= 1:
+                self.map.current_room.exits[d].remove()
+            if t == 2:
+                del self.map.rooms[r.roomid]
 
         return (r, d, t)
 
@@ -279,19 +297,21 @@ class Mapper:
             return False
 
         if hasattr(self, "cmd_" + cmd):
-            return getattr(self, "cmd_" + cmd)(args)
+            return getattr(self, "cmd_" + cmd)(*args)
         else:
             return False
 
-    def cmd_undo(self, args):
-        self.undo()
-        return "Ok."
+    def cmd_undo(self):
+        if self.undo():
+            return "Ok."
+        else:
+            return "Nothing to undo."
 
-    def cmd_clear(self, args):
+    def cmd_clear(self):
         self.map = Map(self.mud)
         return "Map cleared."
 
-    def cmd_nocycle(self, args):
+    def cmd_nocycle(self):
         if self.last_cycle == None:
             return "There was no cycle"
 
@@ -306,13 +326,16 @@ class Mapper:
 
         return "Ok."
 
-    def cmd_opposite(self, args):
+    def cmd_opposite(self, *args):
+        if len(self.move_stack) < 2:
+            return "You must move before setting an opposite."
+
         r, d = self.move_stack[-2][0], self.move_stack[-1][1]
         r.exits[d].set_opposite_name(r, " ".join(args))
 
         return "Changed way back to: " + " ".join(args)
 
-    def cmd_rmexit(self, args):
+    def cmd_rmexit(self, *args):
         if args == []:
             return "Which exit?"
 
@@ -322,104 +345,120 @@ class Mapper:
         else:
             return "No such exit."
 
-    def cmd_mode(self, args):
-        if args == []:
-            return "Mapper mode: " + self.mode
-        
+    def cmd_mode(self, mode):
         valid_modes = ['fixed', 'auto', 'catchall', 'off']
 
-        if args[0] in valid_modes:
-            self.mode = args[0]
+        if mode in valid_modes:
+            self.mode = mode
             return "Mapper mode: " + self.mode
         else:
             return "Valid modes are: " + ", ".join(valid_modes)
 
-    def cmd_move(self, args):
+    def cmd_move(self, *args):
         if args == []:
             return "Move where?"
 
         if args[0] in self.map.current_room.exits:
-            self.map.current_room = self.map_current_room.exits[args[0]].to(self.map.current_room)
+            self.map.current_room = self.map.current_room.exits[args[0]].to(self.map.current_room)
             return True
         else:
             return "There is no way to go " + args[0]
 
-    def cmd_tag(self, args):
+    def cmd_tag(self, *args):
         if args == []:
             if self.map.current_room.tag == "":
                 return "This room has no tag."
             else:
                 return "This room is tagged: %s" % self.map.current_room.tag
         else:
-            self.map.current_room.tag = args[0]
-            return "Tagged this room as: %s" % args[0]
+            tag = " ".join(args)
+            self.map.current_room.tag = tag
+            return "Tagged this room as: %s" % tag
 
-    def cmd_goto(self, args):
+    def cmd_goto(self, *args):
         if args == []:
             return "Go where?"
         else:
-            r = self.find_room(args[0])
+            target = " ".join(args)
+            r = self.find_room(target)
             if r:
                 self.map.current_room = r
                 return "Ok."
             else:
-                return "Tag %s not found." % args[0]
+                return "Tag %s not found." % target
 
-    def cmd_save(self, args):
+    def cmd_save(self, *args):
         """Save the map to a file."""
 
         if len(args) > 0:
-            self.map.name = args[0]
+            self.map.name = " ".join(args)
         if self.map.name == "":
             return "Please give a map name."
 
-        with open("maps/%s" % self.map.name, "w") as f:
-            MapPickler().save(self.map, f)
+        try:
+            with open("%s/%s" % (self.mud.mapdir, self.map.name), "w") as f:
+                MapPickler().save(self.map, f)
+        except IOError, e:
+            return "Error writing map: " + str(e)
         return "Ok."
 
-    def cmd_load(self, args):
+    def cmd_load(self, *args):
         """Load a map from a file."""
 
         if args == []:
             return "Load which map?"
-        with open("maps/%s" % args[0], "r") as f:
-            self.map = MapPickler().load(self.mud, f)
+        mapname = " ".join(args)
+        try:
+            with open("%s/%s" % (self.mud.mapdir, mapname), "r") as f:
+                self.map = MapPickler().load(self.mud, f)
+        except IOError, e:
+            return "Error opening map: " + str(e)
 
         return "Map %s loaded." % args[0]
 
-    def cmd_cycle(self, args):
+    def cmd_join(self, *args):
         """Make a connection from current_room to args[0]."""
 
         if args == []:
-            return "Build a cycle where?"
+            return "Join with which room?"
 
-        other = self.find_room(args[0])
+        othername = " ".join(args)
+        other = self.find_room(othername)
         if other:
             self.join(other)
-            return "Ok. Built cycle to %s." % r.tag
+            return "Ok. Built cycle to %s." % othername
         else:
             return "No such room."
 
-    def cmd_split(self, args):
+    def cmd_split(self, *args):
         """Open a new connected component. The map is split between the
-           current and the last room."""
+           current and the last room.
+           If the edge is already split, it is connected again."""
 
         r,d = self.move_stack[-2][0], self.move_stack[-1][1]
 
-        r.exits[d].split = True
+        r.exits[d].split = not r.exits[d].split
+        self.map.update_coords()
         return "Ok."
     
-    def cmd_merge(self, args):
+    def cmd_merge(self, *args):
         """Merge this map with another map.
            Arguments: Name of other map
                       Roomid or tag of a room in the other map
            The current room will be joined with the room in the other map."""
         
         other = None
-        with open("maps/%s" % args[0], "r") as f:
-            other = MapPickler().load(self.mud, f)
+        targetname = " ".join(args[1:])
 
-        room_to_merge = self.find_room(args[1])
+        try:
+            with open("%s/%s" % (self.mud.mapdir, args[0]), "r") as f:
+                other = MapPickler().load(self.mud, f)
+        except IOError, e:
+            return "Error opening map: " + str(e)
+
+        room_to_merge = other[targetname]
+        if not room_to_merge:
+            return "Room %s not found in other map." % targetname
 
         for r in other.rooms.itervalues():
             self.map.add(r)
@@ -427,6 +466,8 @@ class Mapper:
         self.join(room_to_merge)
 
         return "Merge successful."
+
+
     
 class Map:
     """
@@ -441,6 +482,7 @@ class Map:
         self.rooms = {}
         self.nextid = 0
         self.current_room = self.add(Room(self.mud))
+        self.lock = threading.Lock()
 
     def __repr__(self):
         r = ""
@@ -462,6 +504,29 @@ class Map:
         self.nextid += 1
         return room
     
+    def __getitem__(self, room):
+        """
+           Address a specific room.
+           
+           @param room  Either a a string "tag" or "#roomnumber" or an integer.
+           @return      The room object or None if not found.
+        """
+        r = None
+        if type(room) == str:
+            if room[0] == "#":
+                r = self.rooms[int(room[1:])]
+            else:
+                for ro in self.rooms.itervalues():
+                    if ro.tag == room:
+                        r = ro
+                        break
+        elif type(room) == int:
+            r = self.rooms[room]
+        else:
+            raise TypeError()
+
+        return r
+
     def update_coords(self):
         if self.rooms == {}:
             return 0
@@ -481,13 +546,15 @@ class Map:
         return comp
 
 
-    def render(self, only_current=False):
+    def render(self, only_current=False, rw=0, rh=0):
         """
             Render the map to ASCII.
 
             @param only_current     If True, draw only the current connected component
             @return                 A list of strings, each forming a single line.
         """
+
+        self.lock.acquire()
 
         comp = self.update_coords()
 
@@ -686,6 +753,15 @@ class Map:
 
             allret.extend([str(l) for l in ret])
             allret.append("")
+
+        if rw > 0 and rh > 0:
+            minx = max(0, self.map.current_room.x - rw / 2)
+            maxx = min(minx + rw, len(allret[0]))
+            miny = max(0, self.map.current_room.y - rh / 2)
+            maxy = min(miny + rh, len(allret))
+            allret = [x[minx:maxx] for x in allret[miny:maxy]]
+
+        self.lock.release()
 
         return allret
 

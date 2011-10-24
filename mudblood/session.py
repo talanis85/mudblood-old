@@ -223,7 +223,11 @@ class Session:
                 return None
 
     def cmd_walk(self, tag):
-        path = self.mapper.find_shortest_path(self.mapper.find_room(tag))
+        room = self.mapper.find_room(tag)
+        if not room:
+            return "Target not found."
+
+        path = self.mapper.find_shortest_path(room)
 
         if path:
             self.stdin.writeln("\n".join(path))
