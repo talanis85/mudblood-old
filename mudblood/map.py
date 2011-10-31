@@ -199,13 +199,11 @@ class Mapper:
                 (x, y) = self.mud.Direction.calc(direction, self.map.current_room.x, self.map.current_room.y)
 
                 for r in self.map.rooms.itervalues():
-                    if (r.x, r.y, r.comp) == (x, y, self.map.current_room.comp):
+                    if (r.x, r.y, r.comp, r.mark) == (x, y, self.map.current_room.comp, self.map.current_room.mark):
                         self.last_cycle = (self.map.current_room, new_room, direction)
                         Edge(self.map.current_room, direction, r)
                         self.map.current_room = r
                         self.move_stack.append((self.map.current_room, direction, 1))
-
-                        self.map.update_coords()
 
                         self.map.lock.release()
                         return MapNotification.NEW_CYCLE
@@ -214,11 +212,12 @@ class Mapper:
                 pass
 
             self.map.add(new_room)
+            comp = self.map.current_room.comp
             Edge(self.map.current_room, direction, new_room)
             self.map.current_room = new_room
             self.move_stack.append((self.map.current_room, direction, 2))
 
-            self.map.update_coords()
+            self.map.current_room._update_coords(0, 0, time.time(), comp)
 
         self.map.lock.release()
 
@@ -438,7 +437,7 @@ class Mapper:
         r,d = self.move_stack[-2][0], self.move_stack[-1][1]
 
         r.exits[d].split = not r.exits[d].split
-        self.map.update_coords()
+        self.map.update_coords(True)
         return "Ok."
     
     def cmd_merge(self, *args):
@@ -527,7 +526,7 @@ class Map:
 
         return r
 
-    def update_coords(self):
+    def update_coords(self, only_current=False):
         if self.rooms == {}:
             return 0
 
@@ -538,12 +537,15 @@ class Map:
         # reflect the topology of the game reasonably good. For this, we do a DFS on every
         # Room we haven't visited so far (Room._update_coords()). Each DFS gives us coordinates
         # for a single connected component of the graph.
-        for r in self.rooms.itervalues():
-            if r.mark != mark:
-                r._update_coords(0, 0, mark, comp)
-                comp += 1
+        if only_current:
+            self.current_room._update_coords(0, 0, mark, self.current_room.comp)
+        else:
+            for r in self.rooms.itervalues():
+                if r.mark != mark:
+                    r._update_coords(0, 0, mark, comp)
+                    comp += 1
 
-        return comp
+        return (comp, mark)
 
 
     def render(self, only_current=False, rw=0, rh=0):
@@ -556,14 +558,14 @@ class Map:
 
         self.lock.acquire()
 
-        comp = self.update_coords()
+        (comp, mark) = self.update_coords(only_current)
 
         allret = []
         bridges = []
 
         # Now that we have all coordinates, we can draw the map
         for c in (only_current and [self.current_room.comp] or range(comp)):
-            comprooms = filter(lambda r: r.comp == c, self.rooms.itervalues())
+            comprooms = filter(lambda r: r.comp == c and r.mark == mark, self.rooms.itervalues())
 
             minx = min([r.x for r in comprooms])
             miny = min([r.y for r in comprooms])
