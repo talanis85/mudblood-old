@@ -70,8 +70,19 @@ def get_right_status(session):
              session.mapper.map.current_room.roomid,
              session.mapper.map.name)
 
+def cmd_toggle_map_mode(session):
+    if session.mapper.mode == "fixed":
+        session.mapper.mode = "auto"
+    elif session.mapper.mode == "auto":
+        session.mapper.mode = "off"
+    elif session.mapper.mode == "off":
+        session.mapper.mode = "fixed"
+    elif session.mapper.mode == "catchall":
+        session.mapper.mode = "auto"
+
 keys = {
         "f5": "#showmap",
+        "f4": "#toggle_map_mode",
         }
 
 import os
