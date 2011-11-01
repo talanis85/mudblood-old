@@ -60,6 +60,8 @@ class Interface:
         master = self
         self.mud = mud
 
+        self.current_overlay = None
+
     def run(self):
         self.session = Session(self.mud, self.session_callback)
 
@@ -175,9 +177,11 @@ class Interface:
                                         'center', ('relative', 80),
                                         'middle', ('relative', 80))
         self.w_frame.set_body(self.w_overlay)
+        self.current_overlay = widget
 
     def end_overlay(self):
         self.w_frame.set_body(self.w_session)
+        self.current_overlay = None
 
     def command(self, cmd, args):
         try:
@@ -217,8 +221,11 @@ class Interface:
             return "No MUD def file used."
 
     def cmd_showmap(self):
-        self.w_map.update_map()
-        self.start_overlay(self.w_map)
+        if self.current_overlay == self.w_map:
+            self.end_overlay()
+        else:
+            self.w_map.update_map()
+            self.start_overlay(self.w_map)
         return True
 
 class SessionWidget(urwid.BoxWidget):
