@@ -123,6 +123,14 @@ class Interface:
             elif k == options.prefix and self.w_frame.focus_part != 'footer':
                 self.w_status.set_caption(options.prefix)
                 self.w_frame.set_focus('footer')
+            elif k in self.mud.keys:
+                line = self.mud.keys[k]
+                if line[0] == options.prefix:
+                    line = line[1:].split()
+                    self.command(line[0], line[1:])
+                else:
+                    self.w_session.append_data(line + "\n", 'user_input')
+                    self.w_session.stdin.writeln(line)
             else:
                 outk.append(k)
 

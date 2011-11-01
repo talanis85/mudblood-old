@@ -70,6 +70,10 @@ def get_right_status(session):
              session.mapper.map.current_room.roomid,
              session.mapper.map.name)
 
+keys = {
+        "f5": "#showmap",
+        }
+
 import os
 mapdir = os.path.expanduser("~/.config/mudblood/maps")
 
