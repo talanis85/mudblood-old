@@ -124,9 +124,6 @@ class Session:
         self.telnet.close()
         self._do_callback(Event.CLOSED)
 
-    def current_line(self):
-        return self.fresh_data.split(self.NEWLINE)[-1]
-
     def _do_callback(self, typ, arg=None):
         if self.callback:
             self.callback(self, typ, arg)
