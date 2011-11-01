@@ -132,7 +132,7 @@ class Interface:
                     self.command(line[0], line[1:])
                 else:
                     self.w_session.append_data(line + "\n", 'user_input')
-                    self.w_session.stdin.writeln(line)
+                    self.w_session.session.stdin.writeln(line)
             else:
                 outk.append(k)
 
