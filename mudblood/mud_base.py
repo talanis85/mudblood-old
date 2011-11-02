@@ -79,6 +79,7 @@ def cmd_toggle_map_mode(session):
         session.mapper.mode = "fixed"
     elif session.mapper.mode == "catchall":
         session.mapper.mode = "auto"
+    return True
 
 keys = {
         "f5": "#showmap",
