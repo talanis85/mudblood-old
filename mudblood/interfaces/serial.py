@@ -3,6 +3,7 @@ import readline
 
 from mudblood.session import Session, Event
 from mudblood.colors import Colors
+from mudblood.commands import *
 
 VERSION = "0.1"
 

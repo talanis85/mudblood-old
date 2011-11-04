@@ -8,7 +8,6 @@
 from __future__ import absolute_import
 
 import sys, os
-import mudblood.interfaces.serial, mudblood.interfaces.urwid
 from mudblood.session import load_mud_definition
 
 from optparse import OptionParser
@@ -52,8 +51,10 @@ def main():
     iface = None
 
     if options.interface == "serial":
+        import mudblood.interfaces.serial
         iface = mudblood.interfaces.serial
     elif options.interface == "curses":
+        import mudblood.interfaces.urwid
         iface = mudblood.interfaces.urwid
     else:
         print "Interface not known"
