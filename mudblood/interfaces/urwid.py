@@ -12,6 +12,8 @@ import threading
 
 from mudblood.session import Session, Event
 
+from mudblood.commands import CommandChain, CommandObject
+
 VERSION = "0.1"
 
 
@@ -54,7 +56,7 @@ class DynamicOverlay(urwid.Overlay):
 
 
 
-class Interface:
+class Interface(CommandObject):
     def __init__(self, mud = None):
         global master
         master = self
@@ -104,6 +106,9 @@ class Interface:
                 ("81", 'white', 'default'),
                 ]
 
+        self.command_chain = CommandChain()
+        self.command_chain.chain = [self, self.session, self.session.mapper, self.mud]
+
         screen = urwid.curses_display.Screen()
         self.loop = ThreadSafeMainLoop(self.w_frame,
                                        palette,
@@ -129,7 +134,7 @@ class Interface:
                 line = self.mud.keys[k]
                 if line[0] == options.prefix:
                     line = line[1:].split()
-                    self.command(line[0], line[1:])
+                    self.command(line)
                 else:
                     self.w_session.append_data(line + "\n", 'user_input')
                     self.w_session.session.stdin.writeln(line)
@@ -163,9 +168,9 @@ class Interface:
         self.loop.draw_screen()
 
     def update_status(self):
-        self.w_middle_status.set_text(self.mud.get_middle_status(self.session))
+        self.w_middle_status.set_text(self.mud.get_middle_status())
         self.w_middle_status._invalidate()
-        self.w_right_status.set_text(self.mud.get_right_status(self.session))
+        self.w_right_status.set_text(self.mud.get_right_status())
         self.w_right_status._invalidate()
 
     def set_status(self, msg):
@@ -183,13 +188,9 @@ class Interface:
         self.w_frame.set_body(self.w_session)
         self.current_overlay = None
 
-    def command(self, cmd, args):
+    def command(self, cmd):
         try:
-            if hasattr(self, "cmd_" + cmd):
-                ret = getattr(self, "cmd_" + cmd)(*args)
-            else:
-                ret = self.session.command(cmd, args)
-
+            ret = self.command_chain.run_command(cmd)
             if ret:
                 if isinstance(ret, str):
                     self.set_status(ret)
@@ -226,7 +227,7 @@ class Interface:
         else:
             self.w_map.update_map()
             self.start_overlay(self.w_map)
-        return True
+        return "Ok."
 
 class SessionWidget(urwid.BoxWidget):
     class SessionList(urwid.ListWalker):
@@ -400,7 +401,7 @@ class StatusWidget(urwid.Edit):
             words = self.get_edit_text().split()
 
             if words != "":
-                master.command(words[0], words[1:])
+                master.command(words)
 
             self.set_edit_text("")
             master.w_frame.set_focus('body')

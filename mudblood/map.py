@@ -3,6 +3,8 @@ import pickle
 import threading
 from operator import attrgetter
 
+from commands import CommandObject
+
 class Edge:
     """
         An edge of a graph
@@ -147,7 +149,7 @@ class Room:
 class MapNotification:
     NEW_CYCLE = 1
 
-class Mapper:
+class Mapper(CommandObject):
     """
         Provides automapping functionality. Client modules should interface with the mapper
         using Mapper.go_to().
@@ -291,12 +293,9 @@ class Mapper:
 
     # COMMANDS
 
-    def command(self, cmd, args):
-        if cmd == "":
-            return False
-
-        if hasattr(self, "cmd_" + cmd):
-            return getattr(self, "cmd_" + cmd)(*args)
+    def pass_command(self, cmd):
+        if cmd[0] == "map":
+            return CommandObject.pass_command(self, cmd[1:])
         else:
             return False
 

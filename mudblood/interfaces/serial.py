@@ -3,11 +3,11 @@ import readline
 
 from mudblood.session import Session, Event
 from mudblood.colors import Colors
-from mudblood.commands import *
+from mudblood.commands import CommandChain, CommandObject
 
 VERSION = "0.1"
 
-class Interface:
+class Interface(CommandObject):
     def __init__(self, mud):
         self.sname = ""
         self.sessions = {}
@@ -38,8 +38,13 @@ class Interface:
 
         sys.stdout.write(Colors.INPUT)
 
+        self.command_chain = CommandChain()
+
         if self.session():
+            self.command_chain.chain = [self, self.session(), self.session().mapper]
             self.session().connect()
+        else:
+            self.command_chain.chain = [self]
 
         while True:
             try:
@@ -50,8 +55,17 @@ class Interface:
             words = line.split()
 
             if len(words) > 0 and words[0][0] == options.prefix:
-                args = words[1:]
-                self.command(words[0][1:], args)
+                cmd = [words[0][1:]]
+                cmd.extend(words[1:]) 
+                try:
+                    ret = self.command_chain.run_command(cmd)
+                    if ret:
+                        if isinstance(ret, str):
+                            self.message(ret)
+                    else:
+                        self.error("Command not found.")
+                except TypeError:
+                    self.error("Syntax Error")
             else:
                 if self.session() == None:
                     self.error("Not connected")
@@ -87,31 +101,15 @@ class Interface:
             self.error("No such session")
         else:
             self.sname = newsession
-            self.message("[%s] Switched session" % newsession);
+            self.command_chain.chain = [self, self.session(), self.session().mapper]
             readline.set_completer(self.sessions[newsession].completer.complete)
             for i in self.sessions[newsession].out:
                 sys.stdout.write(i.read())
 
     # commands ---
 
-    def command(self, cmd, args):
-        ret = None
-
-        if hasattr(self, "cmd_" + cmd):
-            try:
-                ret = getattr(self, "cmd_%s" % cmd)(*args)
-            except TypeError:
-                self.error("Syntax error")
-        else:
-            ret = self.session().command(cmd, args)
-
-        if ret:
-            self.message(ret)
-        else:
-            self.error("Unknown command")
-
     def cmd_session(self, name, host="", port=0):
-        """.session <name> [<host> <port>]
+        """session <name> [<host> <port>]
 
            Switch session or create new session."""
 
@@ -119,47 +117,29 @@ class Interface:
             try:
                 self.switch_session(name)
             except KeyError, e:
-                self.error("No such session");
+                return "No such session."
         else:
             if name in self.sessions.keys():
-                self.error("There is already a session named '%s'" % name)
+                return "There is already a session named '%s'" % name
             else:
                 self.sessions[name] = Session(host, int(port), self.session_cb)
                 self.switch_session(name)
 
                 self.sessions[name].connect()
+                return "[%s] Switched session" % name
 
     def cmd_sessions(self):
-        """.sessions
+        """sessions
 
            List all active sessions."""
 
         if len(self.sessions) == 0:
-            self.message("No sessions")
+            return "No sessions"
         else:
-            for s in self.sessions.keys():
-                self.message(s)
-
-    def cmd_help(self, topic="commands"):
-        """.help [<command>]
-
-           Show help for command"""
-
-        if topic == "commands":
-            self.message("Commands:")
-            for c in dir(self):
-                if c.startswith("cmd_"):
-                    self.message("\t" + c[4:])
-            return
-        try:
-            self.message("\n".join(map(lambda x: x.strip(),
-                                       getattr(self, "cmd_%s" % topic).__doc__.split("\n")))
-                             .replace("." + topic, options.prefix + topic))
-        except AttributeError:
-            self.error("Topic not found")
+            return "\n".join(self.sessions.keys())
 
     def cmd_quit(self):
-        """.quit
+        """quit
 
            Quit."""
 

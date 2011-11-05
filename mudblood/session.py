@@ -7,14 +7,19 @@ import traceback
 
 from collections import deque
 
+from commands import CommandObject
+
 from hook import Hook
 from map import Mapper, MapNotification
+from mud_base import Mud
 
 def load_mud_definition(path):
     import os
-    mud = __import__("mudblood.mud_base")
+    mud = Mud()
     if os.path.exists(path):
-        execfile(path, mud.__dict__)
+        d = mud.__dict__
+        d['self'] = mud
+        execfile(path, {"Mud": Mud}, d)
         mud.path = path
         return mud
     else:
@@ -72,7 +77,7 @@ class Event:
     CLOSED      = 5
     STATUS      = 6
 
-class Session:
+class Session(CommandObject):
     """
         A single game session. Asynchronous I/O is handled via a callback.
     """
@@ -113,6 +118,8 @@ class Session:
             self._do_callback(Event.ERROR)
             self._do_callback(Event.CLOSED)
             return
+        
+        self.mud.connect(self)
 
         self.connected = True
         self._do_callback(Event.CONNECTED)
@@ -207,17 +214,6 @@ class Session:
             self.out[stream] = IOStream()
         self.out[stream].write(data)
         self._do_callback(Event.STDIO)
-
-    def command(self, cmd, args):
-        if hasattr(self.mud, "cmd_" + cmd):
-            return getattr(self.mud, "cmd_" + cmd)(self, *args)
-        elif cmd == "map":
-            return self.mapper.command(args[0], args[1:])
-        else:
-            if hasattr(self, "cmd_" + cmd):
-                return getattr(self, "cmd_" + cmd)(*args)
-            else:
-                return None
 
     def cmd_walk(self, tag):
         room = self.mapper.find_room(tag)
