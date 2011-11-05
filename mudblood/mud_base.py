@@ -4,6 +4,7 @@
 # MUD definition base module. Must be imported by MUD definitions.
 
 from commands import CommandObject
+import hook
 
 class Mud(CommandObject):
 
@@ -78,6 +79,22 @@ class Mud(CommandObject):
             self.session.mapper.mode = "auto"
         return True
 
+    def cmd_addtrigger(self, *args):
+        (t, m, r) = " ".join(args).partition(" -> ")
+        if m:
+            self.triggers.add(hook.Trigger(t, r))
+            return "Added Trigger: '%s' Response: '%s'" % (t, r)
+        else:
+            return "Syntax Error"
+
+    def cmd_deltrigger(self, n):
+        n = int(n)
+        self.triggers.remove(n)
+        return "Deleted trigger #%d" % n
+
+    def cmd_triggers(self):
+        return "\n".join(["%d: %s" % (k, str(self.triggers.t[k])) for k in range(len(self.triggers.t))])
+
     def get_middle_status(self):
         return ""
 
@@ -106,5 +123,7 @@ class Mud(CommandObject):
         'command_not_found': "Hae?",
         }
 
-    input_hooks = []
+    triggers = hook.TriggerList()
+
+    input_hooks = [triggers]
     output_hooks = []

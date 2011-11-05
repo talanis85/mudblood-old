@@ -64,3 +64,32 @@ class FunctionHook(Hook):
             self.fun(session, line)
 
         return line
+
+class TriggerList(Hook):
+    def __init__(self):
+        self.t = []
+
+    def add(self, trigger):
+        self.t.append(trigger)
+
+    def remove(self, n):
+        del self.t[n]
+
+    def process(self, session, line):
+        for t in self.t:
+            t.process(session, line)
+        return line
+
+class Trigger(Hook):
+    def __init__(self, trigger, response):
+        self.trigger = trigger
+        self.response = response
+
+    def __repr__(self):
+        return "%s -> %s" % (self.trigger, self.response)
+
+    def process(self, session, line):
+        m = re.search(self.trigger, line)
+        if m:
+            session.stdin.writeln(self.response % m.groups())
+        return line
