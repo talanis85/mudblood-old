@@ -17,9 +17,8 @@ def load_mud_definition(path):
     import os
     mud = Mud()
     if os.path.exists(path):
-        d = mud.__dict__
-        d['self'] = mud
-        execfile(path, {"Mud": Mud}, d)
+        mud.self = mud
+        execfile(path, {"Mud": Mud, "this": mud}, mud.__dict__)
         mud.path = path
         return mud
     else:
