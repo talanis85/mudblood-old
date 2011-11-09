@@ -107,7 +107,7 @@ class Interface(CommandObject):
                 ]
 
         self.command_chain = CommandChain()
-        self.command_chain.chain = [self, self.session, self.session.mapper, self.mud]
+        self.command_chain.chain = [self.mud, self, self.session, self.session.mapper]
 
         screen = urwid.curses_display.Screen()
         self.loop = ThreadSafeMainLoop(self.w_frame,
