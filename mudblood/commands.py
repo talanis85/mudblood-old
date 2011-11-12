@@ -1,7 +1,10 @@
 class CommandObject:
     def pass_command(self, cmd):
         if hasattr(self, "cmd_" + cmd[0]):
-            return getattr(self, "cmd_" + cmd[0])(*(cmd[1:]))
+            ret = getattr(self, "cmd_" + cmd[0])(*(cmd[1:]))
+            if not ret:
+                return True
+            return ret
         else:
             return False
 
