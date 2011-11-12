@@ -76,6 +76,7 @@ class Event:
     CONNECTED   = 4
     CLOSED      = 5
     STATUS      = 6
+    MAP         = 7
 
 class Session(CommandObject):
     """
@@ -209,6 +210,9 @@ class Session(CommandObject):
                         self.info.writeln("Mapper: Found cycle. 'map nocycle' to disagree")
                         self._do_callback(Event.INFO)
 
+                    if ret > 0:
+                        self._do_callback(Event.MAP)
+
     def write_to_stream(self, stream, data):
         if not stream in self.out:
             self.out[stream] = IOStream()
@@ -224,7 +228,8 @@ class Session(CommandObject):
 
         if path:
             self.stdin.writeln("\n".join(path))
-            return "Path is: " + str(path)
+            self.info.writeln("Path is: " + str(path))
+            self._do_callback(Event.INFO)
         else:
             return "No path found."
 

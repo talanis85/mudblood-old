@@ -161,8 +161,8 @@ class Interface(CommandObject):
             self.w_session.append_data(ob.stderr.read() + "\n", 'error')
         elif typ == Event.STATUS:
             self.w_user_status.set_text(ob.user_status)
-
-        self.w_map.update_map()
+        elif typ == Event.MAP:
+            self.w_map.update_map()
 
         self.update_status()
         self.loop.draw_screen()
@@ -225,7 +225,6 @@ class Interface(CommandObject):
         if self.current_overlay == self.w_map:
             self.end_overlay()
         else:
-            self.w_map.update_map()
             self.start_overlay(self.w_map)
         return "Ok."
 

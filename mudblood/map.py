@@ -147,7 +147,9 @@ class Room:
 # ---
 
 class MapNotification:
-    NEW_CYCLE = 1
+    NOTHING   = 0
+    MODIFIED  = 1
+    NEW_CYCLE = 10
 
 class Mapper(CommandObject):
     """
@@ -193,7 +195,7 @@ class Mapper(CommandObject):
         else:
             if self.mode not in ['auto', 'catchall']:
                 self.map.lock.release()
-                return
+                return MapNotification.NOTHING
 
             new_room = Room(self.mud)
 
@@ -222,6 +224,8 @@ class Mapper(CommandObject):
             self.map.current_room._update_coords(0, 0, time.time(), comp)
 
         self.map.lock.release()
+
+        return MapNotification.MODIFIED
 
     def find_room(self, room):
         """
