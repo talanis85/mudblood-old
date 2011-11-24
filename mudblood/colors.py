@@ -1,7 +1,7 @@
 
 class Colors:
     OFF = '\033[0m'
-    MESSAGE = '\033[34m'
+    INFO = '\033[34m'
     ERROR = '\033[33m'
     INPUT = '\033[33m'
 

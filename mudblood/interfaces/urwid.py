@@ -11,30 +11,13 @@ import traceback
 import threading
 
 from mudblood.session import Session, Event
-
 from mudblood.commands import CommandChain, CommandObject
+from mudblood.colors import Colors
 
 VERSION = "0.1"
 
 
 master = None
-
-
-class ThreadSafeMainLoop(urwid.MainLoop):
-
-    """We want to call draw_screen from different threads, so we better
-       use a lock."""
-
-    def __init__(self, widget, palette=[], screen=None, handle_mouse=True, input_filter=None, unhandled_input=None, event_loop=None):
-        self.draw_lock = threading.Lock()
-
-        urwid.MainLoop.__init__(self, widget, palette, screen, handle_mouse, input_filter, unhandled_input, event_loop)
-
-    def draw_screen(self):
-        self.draw_lock.acquire()
-        if self.screen._started:
-            urwid.MainLoop.draw_screen(self)
-        self.draw_lock.release()
 
 
 
@@ -54,6 +37,22 @@ class DynamicOverlay(urwid.Overlay):
         else:
             return key
 
+
+
+class WindowWriter:
+    def __init__(self, loop, window):
+        self.window = window
+        self.pipe = loop.watch_pipe(self.pipe_callback)
+
+    def pipe_callback(self, data):
+        self.window.append_data(data)
+        return True
+
+    def write(self, data, color=None):
+        if color:
+            os.write(self.pipe, color + data + Colors.OFF)
+        else:
+            os.write(self.pipe, data)
 
 
 class Interface(CommandObject):
@@ -109,12 +108,19 @@ class Interface(CommandObject):
         self.command_chain = CommandChain()
         self.command_chain.chain = [self.mud, self, self.session, self.session.mapper]
 
-        screen = urwid.curses_display.Screen()
-        self.loop = ThreadSafeMainLoop(self.w_frame,
+        if options.screen == "raw":
+            self.screen = urwid.raw_display.Screen()
+        elif options.screen == "curses":
+            self.screen = urwid.curses_display.Screen()
+
+        self.loop = urwid.MainLoop(self.w_frame,
                                        palette,
-                                       screen,
+                                       self.screen,
                                        handle_mouse=False,
                                        input_filter=self.master_input)
+        
+        self.writer = WindowWriter(self.loop, self.w_session)
+
         self.session.connect()
         self.loop.run()
 
@@ -136,7 +142,7 @@ class Interface(CommandObject):
                     line = line[1:].split()
                     self.command(line)
                 else:
-                    self.w_session.append_data(line + "\n", 'user_input')
+                    self.writer.write(line + "\n", Colors.INPUT)
                     self.w_session.session.stdin.writeln(line)
             else:
                 outk.append(k)
@@ -147,25 +153,26 @@ class Interface(CommandObject):
         if typ == Event.STDIO:
             for o in ob.out:
                 if ob.out[o].has_data():
-                    self.w_session.append_data(ob.out[o].read()) 
+                    self.writer.write(ob.out[o].read())
         if typ == Event.INFO:
-            self.w_session.append_data(ob.info.read(), 'info') 
+            self.writer.write(ob.info.read(), Colors.INFO)
         elif typ == Event.CLOSED:
             for o in ob.out:
                 if ob.out[o].has_data():
-                    self.w_session.append_data(ob.out[o].read()) 
-            self.w_session.append_data("Session closed.\n", 'info')
+                    self.writer.write(ob.out[o].read())
+            self.writer.write("Session closed.\n", Colors.INFO)
         elif typ == Event.CONNECTED:
-            self.w_session.append_data("Session started.\n", 'info')
+            self.writer.write("Session started.\n", Colors.INFO)
         elif typ == Event.ERROR:
-            self.w_session.append_data(ob.stderr.read() + "\n", 'error')
+            self.writer.write(ob.stderr.read(), Colors.ERROR)
         elif typ == Event.STATUS:
             self.w_user_status.set_text(ob.user_status)
         elif typ == Event.MAP:
-            self.w_map.update_map()
+            if self.current_overlay == self.w_map:
+                self.w_map.update_map()
 
         self.update_status()
-        self.loop.draw_screen()
+        #self.loop.entering_idle()
 
     def update_status(self):
         self.w_middle_status.set_text(self.mud.get_middle_status())
@@ -217,6 +224,8 @@ class Interface(CommandObject):
                 
             self.mud = newmud
             self.session.mud = newmud
+            self.command_chain.chain = [self.mud, self, self.session, self.session.mapper]
+            self.mud.connect(self.session)
             return "Ok."
         else:
             return "No MUD def file used."
@@ -226,9 +235,13 @@ class Interface(CommandObject):
             self.end_overlay()
         else:
             self.start_overlay(self.w_map)
+            self.w_map.update_map()
         return "Ok."
 
+
+
 class SessionWidget(urwid.BoxWidget):
+
     class SessionList(urwid.ListWalker):
         def __init__(self, w_session):
             self.w_session = w_session
@@ -241,7 +254,11 @@ class SessionWidget(urwid.BoxWidget):
                 w, n = start_from
             if n >= len(self.w_session.lines) - 1:
                 return (None, None)
-            return (urwid.Text(self.w_session.lines[n+1]), n+1)
+
+            if self.w_session.lines[n+1] == []:
+                return (urwid.Text(""), n+1)
+            else:
+                return (urwid.Text(self.w_session.lines[n+1]), n+1)
 
         def get_prev(self, start_from):
             if isinstance(start_from, int):
@@ -250,10 +267,17 @@ class SessionWidget(urwid.BoxWidget):
                 w, n = start_from
             if n <= 0:
                 return (None, None)
-            return (urwid.Text(self.w_session.lines[n-1]), n-1)
+
+            if self.w_session.lines[n-1] == []:
+                return (urwid.Text(""), n-1)
+            else:
+                return (urwid.Text(self.w_session.lines[n-1]), n-1)
 
         def get_focus(self):
-            return (urwid.Text(self.w_session.lines[self.focus]), self.focus)
+            if self.w_session.lines[self.focus] == []:
+                return (urwid.Text(""), self.focus)
+            else:
+                return (urwid.Text(self.w_session.lines[self.focus]), self.focus)
 
         def set_focus(self, scr):
             self.focus = scr
@@ -262,16 +286,18 @@ class SessionWidget(urwid.BoxWidget):
             if self.focus < 0:
                 self.focus = 0
 
+
     class SessionListBox(urwid.ListBox):
         def rows(self, (maxcol,), focus=False):
             return len(self.body.w_session.lines)
+
 
     def __init__(self, session):
         self.data_lock = threading.Lock()
         self.scrolling = False
         self.session = session
         self.data = ""
-        self.lines = [[('default','')]]
+        self.lines = [[('00','')]]
 
         self.completer = self.session.completer
         self.completer_state = 0
@@ -287,6 +313,10 @@ class SessionWidget(urwid.BoxWidget):
         self.current_attr = "00"
 
     def render(self, size, focus=False):
+        """
+            Compose the session window together with the input widget.
+        """
+
         c = urwid.CompositeCanvas(urwid.SolidCanvas(" ", size[0], size[1]))
 
         h = min(size[1], len(self.lines))
@@ -297,6 +327,7 @@ class SessionWidget(urwid.BoxWidget):
             x = 0
             for l in self.lines[-1]:
                 x += len(l[1])
+            x = x % size[0]
             r = self.input_attr.rows((size[0]-x,), focus)
             c.overlay(self.input_attr.render((size[0]-x,), focus), x, size[1]-r)
 
@@ -309,7 +340,7 @@ class SessionWidget(urwid.BoxWidget):
         ret = None
 
         if key == 'enter':
-            self.append_data(self.input.get_edit_text() + "\n", 'user_input')
+            self.append_data(Colors.INPUT + self.input.get_edit_text() + Colors.OFF + "\n")
             t = self.input.get_edit_text()
             self.input.set_edit_text("")
             self.history.append(t)
@@ -329,7 +360,7 @@ class SessionWidget(urwid.BoxWidget):
                     self.input.set_edit_pos(len(newtext))
                     self.completer_state += 1
         elif key == 'up' or key == 'down':
-            self.history_pos = (self.history_pos + (key == 'up' and 1 or -1)) % len(self.history)
+            self.history_pos = max(0, min(len(self.history), (self.history_pos + (key == 'up' and 1 or -1))))
             self.input.set_edit_text(self.history[-self.history_pos])
             self.input.set_edit_pos(10000)
         elif key == 'page up' or key == 'page down':
@@ -339,36 +370,30 @@ class SessionWidget(urwid.BoxWidget):
             self.completer_state = 0
             ret = self.input.keypress((size[0],), key)
 
-        self.data_lock.acquire()
         self._invalidate()
-        self.data_lock.release()
 
         return ret
 
-    def append_data(self, data, attr='00', redraw=False):
+    def append_data(self, data):
         scroll = False
         if self.text.get_focus()[1] == len(self.lines)-1:
             scroll = True
 
-        self.data_lock.acquire()
-
-        last_attr = self.current_attr
-        if attr != '00':
-            self.current_attr = attr
-
         for l in data.splitlines(True):
-            self.lines[-1].extend(self.parse_attributes(l.strip('\n')))
-            if l[-1] == '\n':
-                self.lines.append([('default', '')])
+            newchunks = self.parse_attributes(l.strip('\n'))
+            if len(self.lines[-1]) > 0 and len(newchunks) > 0 and self.lines[-1][-1][0] == newchunks[0][0]:
+                self.lines[-1][-1] = (newchunks[0][0], self.lines[-1][-1][1] + newchunks[0][1])
+                self.lines[-1].extend(newchunks[1:])
+            else:
+                self.lines[-1].extend(newchunks)
 
-        if not self.scrolling:
+            if l[-1] == '\n':
+                self.lines.append([])
+
+        if scroll:
             self.text.set_focus(len(self.lines)-1)
 
-        self.current_attr = last_attr
-
         self._invalidate()
-
-        self.data_lock.release()
 
     def parse_attributes(self, data):
         ret = []
@@ -392,12 +417,14 @@ class SessionWidget(urwid.BoxWidget):
 
         return ret
 
+
+
 class StatusWidget(urwid.Edit):
     def keypress(self, size, key):
         if key == "enter":
             global master
 
-            words = self.get_edit_text().split()
+            words = str(self.get_edit_text()).split()
 
             if words != "":
                 master.command(words)
@@ -406,6 +433,8 @@ class StatusWidget(urwid.Edit):
             master.w_frame.set_focus('body')
         else:
             return urwid.Edit.keypress(self, size, key)
+
+
 
 class MapWidget(urwid.WidgetWrap):
     def __init__(self, mapper):

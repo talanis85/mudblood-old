@@ -26,6 +26,14 @@ def main():
                       default = "serial",
                       help =    "Choices: serial (default) or curses",)
 
+    parser.add_option("-s", "--screen",
+                      action =  "store",
+                      dest =    "screen",
+                      type =    "choice",
+                      choices = ["raw", "curses"],
+                      default = "curses",
+                      help =    "Choices: raw, curses. Only for curses interface.",)
+
     parser.add_option("-p", "--prefix",
                       action =  "store",
                       dest =    "prefix",

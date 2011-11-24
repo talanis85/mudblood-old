@@ -94,7 +94,7 @@ class Room:
         self.distance = 0
 
     def __repr__(self):
-        return "Room #%d, exits: %s" % (self.roomid, ",".join(self.exits.keys()))
+        return "Room #%d, exits: %s" % (self.roomid, ",".join(["%s (%s)" % (k, type(k)) for k in self.exits.keys()]))
 
     def add_exit(self, room, name):
         """
@@ -117,6 +117,17 @@ class Room:
             @param name     The direction to remove
         """
         self.exits[name].remove()
+
+    def dfs(self, visited):
+        visited = set(visited)
+        visited.add(self)
+
+        for e in self.exits.itervalues():
+            if e.to(self) in visited:
+                continue
+            visited |= e.to(self).dfs(visited)
+
+        return visited
 
     def _update_coords(self, x, y, mark, comp):
         """
@@ -409,14 +420,18 @@ class Mapper(CommandObject):
 
         if args == []:
             return "Load which map?"
-        mapname = " ".join(args)
+        mapname = args[0]
         try:
             with open("%s/%s" % (self.mud.mapdir, mapname), "r") as f:
                 self.map = MapPickler().load(self.mud, f)
         except IOError, e:
             return "Error opening map: " + str(e)
+        
+        ret = ""
+        if len(args) == 2:
+            ret = self.cmd_goto(" ".join(args[1:]))
 
-        return "Map %s loaded." % args[0]
+        return "Map %s loaded. %s" % (args[0], ret)
 
     def cmd_join(self, *args):
         """Make a connection from current_room to args[0]."""
@@ -432,7 +447,7 @@ class Mapper(CommandObject):
         else:
             return "No such room."
 
-    def cmd_split(self, *args):
+    def cmd_split(self):
         """Open a new connected component. The map is split between the
            current and the last room.
            If the edge is already split, it is connected again."""
@@ -469,7 +484,33 @@ class Mapper(CommandObject):
 
         return "Merge successful."
 
+    def cmd_prunetest(self, *args):
+        """Returns the number of rooms that would be pruned."""
 
+        d = " ".join(args)
+        if d not in self.map.current_room.exits:
+            return "Direction %d not found." % d
+
+        room = self.map.current_room.exits[d].to(self.map.current_room)
+        v = room.dfs(set([self.map.current_room])) - set([self.map.current_room])
+        return "Number of rooms to prune: %d" % len(v)
+
+    def cmd_prune(self, *args):
+        """Remove the submap in the given direction.
+           Arguments: The direction."""
+
+        d = " ".join(args)
+        if d not in self.map.current_room.exits:
+            return "Direction %d not found." % d
+
+        room = self.map.current_room.exits[d].to(self.map.current_room)
+        v = room.dfs(set([self.map.current_room])) - set([self.map.current_room])
+
+        self.map.current_room.exits[d].remove()
+        for r in v:
+            del self.map.rooms[r.roomid]
+
+        return "Pruned %d rooms." % len(v)
     
 class Map:
     """
@@ -514,7 +555,7 @@ class Map:
            @return      The room object or None if not found.
         """
         r = None
-        if type(room) == str:
+        if type(room) == str or type(room) == unicode:
             if room[0] == "#":
                 r = self.rooms[int(room[1:])]
             else:

@@ -161,6 +161,12 @@ class Session(CommandObject):
                 break
 
             data = data.replace("\r\n", self.NEWLINE)
+
+            for c in data:
+                if ord(c) > 127:
+                    self.info.writeln("Special character: %d" % ord(c))
+                    self._do_callback(Event.INFO)
+
             lines = data.splitlines(True)
 
             for l in lines:
