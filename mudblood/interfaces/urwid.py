@@ -40,12 +40,17 @@ class DynamicOverlay(urwid.Overlay):
 
 
 class WindowWriter:
-    def __init__(self, loop, window):
+    def __init__(self, loop, window, callback_name=""):
         self.window = window
         self.pipe = loop.watch_pipe(self.pipe_callback)
+        self.callback_name = callback_name
 
     def pipe_callback(self, data):
-        self.window.append_data(data)
+        if self.callback_name == "":
+            self.window.append_data(data)
+        else:
+            getattr(self.window, self.callback_name)(data);
+
         return True
 
     def write(self, data, color=None):
@@ -53,6 +58,7 @@ class WindowWriter:
             os.write(self.pipe, color + data + Colors.OFF)
         else:
             os.write(self.pipe, data)
+
 
 
 class Interface(CommandObject):
@@ -70,12 +76,8 @@ class Interface(CommandObject):
         self.w_status = StatusWidget()
 
         self.w_map = MapWidget(self.session.mapper)
-        self.w_right_status = urwid.Text("", align="right")
-        self.w_middle_status = urwid.Text("", align="right")
 
-        self.w_bottom_bar = urwid.Columns([urwid.AttrMap(self.w_status, 'user_input'), self.w_middle_status, self.w_right_status])
-
-        self.w_frame = urwid.Frame(self.w_session, None, self.w_bottom_bar)
+        self.w_frame = urwid.Frame(self.w_session, None, self.w_status)
 
         # TODO: Make user_input, info and error customizable
         palette = [
@@ -130,11 +132,10 @@ class Interface(CommandObject):
         for k in keys:
             if k == "esc":
                 self.end_overlay()
-                self.w_status.set_caption("")
-                self.w_status.set_edit_text("")
+                self.w_status.stop_edit()
                 self.w_frame.set_focus('body')
             elif k == options.prefix and self.w_frame.focus_part != 'footer':
-                self.w_status.set_caption(options.prefix)
+                self.w_status.start_edit()
                 self.w_frame.set_focus('footer')
             elif k in self.mud.keys:
                 line = self.mud.keys[k]
@@ -166,22 +167,19 @@ class Interface(CommandObject):
         elif typ == Event.ERROR:
             self.writer.write(ob.stderr.read(), Colors.ERROR)
         elif typ == Event.STATUS:
-            self.w_user_status.set_text(ob.user_status)
+            pass
         elif typ == Event.MAP:
             if self.current_overlay == self.w_map:
                 self.w_map.update_map()
 
         self.update_status()
-        #self.loop.entering_idle()
 
-    def update_status(self):
-        self.w_middle_status.set_text(self.mud.get_middle_status())
-        self.w_middle_status._invalidate()
-        self.w_right_status.set_text(self.mud.get_right_status())
-        self.w_right_status._invalidate()
+    def update_status(self, loop=None, data=None):
+        self.w_status.set_middle(self.mud.get_middle_status())
+        self.w_status.set_right(self.mud.get_right_status())
 
     def set_status(self, msg):
-        self.w_status.set_caption(msg)
+        self.w_status.set_left(msg)
 
     def start_overlay(self, widget):
         self.w_overlay = DynamicOverlay(urwid.LineBox(widget),
@@ -419,20 +417,47 @@ class SessionWidget(urwid.BoxWidget):
 
 
 
-class StatusWidget(urwid.Edit):
+class StatusWidget(urwid.WidgetWrap):
+    def __init__(self):
+        self.w_main_status = urwid.Edit();
+        self.w_right_status = urwid.Text("", align="right")
+        self.w_middle_status = urwid.Text("", align="right")
+
+        self.columns = urwid.Columns(
+            [urwid.AttrMap(self.w_main_status, 'user_input'), self.w_middle_status, self.w_right_status]
+            )
+
+        urwid.WidgetWrap.__init__(self, self.columns)
+
     def keypress(self, size, key):
         if key == "enter":
             global master
 
-            words = str(self.get_edit_text()).split()
+            words = str(self.w_main_status.get_edit_text()).split()
 
             if words != "":
                 master.command(words)
 
-            self.set_edit_text("")
+            self.w_main_status.set_edit_text("")
             master.w_frame.set_focus('body')
         else:
-            return urwid.Edit.keypress(self, size, key)
+            return self.w_main_status.keypress(size, key)
+
+    def start_edit(self):
+        self.w_main_status.set_caption(options.prefix)
+
+    def stop_edit(self):
+        self.w_main_status.set_caption("")
+        self.w_main_status.set_edit_text("")
+
+    def set_left(self, text):
+        self.w_main_status.set_caption(text)
+
+    def set_middle(self, text):
+        self.w_middle_status.set_text(text);
+
+    def set_right(self, text):
+        self.w_right_status.set_text(text);
 
 
 
