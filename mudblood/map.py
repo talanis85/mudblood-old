@@ -96,6 +96,9 @@ class Room:
     def __repr__(self):
         return "Room #%d, exits: %s" % (self.roomid, ",".join(["%s (%s)" % (k, type(k)) for k in self.exits.keys()]))
 
+    def compid(self):
+        return (self.mark, self.comp)
+
     def add_exit(self, room, name):
         """
             Connect two rooms in both directions, thus keeping the graph undirected.
@@ -723,7 +726,7 @@ class Map:
                     elif e == self.mud.Direction.SOUTHWEST:
                         ret[r.y*3+2][r.x*3] = '/'
                 e = r.get_exit(self.mud.Direction.SOUTH)
-                if e and e.to(r).comp == c:
+                if e and e.to(r).compid() == r.compid():
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1
                     if e.to(r).x == r.x:
@@ -748,7 +751,7 @@ class Map:
                         ret[cy][cx] = "|"
 
                 e = r.get_exit(self.mud.Direction.EAST)
-                if e and e.to(r).y == r.y and e.to(r).comp == c:
+                if e and e.to(r).y == r.y and e.to(r).compid() == r.compid():
                     cy = r.y * 3 + 1
                     cx = r.x * 3 + 1 + 1
                     while cx < w * 3 + 1 and chr(ret[cy][cx]) in [' ', '-', '/', '\\', '+']:
@@ -756,7 +759,7 @@ class Map:
                         cx += 1
 
                 e = r.get_exit(self.mud.Direction.SOUTHEAST)
-                if e and e.to(r).comp == c:
+                if e and e.to(r).compid() == r.compid():
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 + 1
                     if e.to(r).y-e.to(r).x == r.y-r.x:
@@ -777,7 +780,7 @@ class Map:
                         ret[cy][cx] = "\\"
 
                 e = r.get_exit(self.mud.Direction.SOUTHWEST)
-                if e and e.to(r).comp == c:
+                if e and e.to(r).compid() == r.compid():
                     cy = r.y * 3 + 1 + 1
                     cx = r.x * 3 + 1 - 1
                     if e.to(r).y+e.to(r).x == (r.y+r.x):
