@@ -384,6 +384,7 @@ class SessionWidget(urwid.BoxWidget):
                 self.lines[-1].extend(newchunks[1:])
             else:
                 self.lines[-1].extend(newchunks)
+            self.lines[-1] = self.parse_backspace(self.lines[-1])
 
             if l[-1] == '\n':
                 self.lines.append([])
@@ -392,6 +393,24 @@ class SessionWidget(urwid.BoxWidget):
             self.text.set_focus(len(self.lines)-1)
 
         self._invalidate()
+
+    def parse_backspace(self, line):
+        result = []
+        for chunk in line:
+            s = ""
+            i = 0
+            for c in chunk[1]:
+                if c == "\b":
+                    if i == 0:
+                        if len(result) > 0:
+                            result[i-1] = (result[i][0], result[i-1][1][:-1])
+                    else:
+                        s = s[:-1]
+                else:
+                    s += c
+                i += 1
+            result.append((chunk[0], s))
+        return result
 
     def parse_attributes(self, data):
         ret = []
