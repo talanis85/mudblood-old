@@ -17,7 +17,7 @@ class Interface(CommandObject):
             self.sname = "default"
 
     def message(self, msg):
-        print Colors.MESSAGE + msg + Colors.INPUT
+        print Colors.INFO + msg + Colors.INPUT
 
     def error(self, msg):
         print Colors.ERROR + msg + Colors.INPUT
