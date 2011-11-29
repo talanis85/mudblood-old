@@ -25,6 +25,8 @@ class Edge:
         a.exits[a_name] = self
         b.exits[b_name] = self
 
+        self.nosave = False
+
     def remove(self):
         del self.a.exits[self.a_name]
         del self.b.exits[self.b_name]
@@ -830,7 +832,8 @@ class MapPickler:
             for e in r.exits.itervalues():
                 edges.add(e)
         for e in edges:
-            file.write("%d|%s|%d|%s|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0)))
+            if not e.nosave:
+                file.write("%d|%s|%d|%s|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0)))
 
     def load(self, mud, file):
         def readint():

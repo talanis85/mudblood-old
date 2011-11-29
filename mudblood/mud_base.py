@@ -68,6 +68,10 @@ class Mud(CommandObject):
     def connect(self, session):
         self.session = session
 
+    def load_map_hook(self, map):
+        """Executed after a map was loaded."""
+        pass
+
     def cmd_toggle_map_mode(self):
         if self.session.mapper.mode == "fixed":
             self.session.mapper.mode = "auto"
