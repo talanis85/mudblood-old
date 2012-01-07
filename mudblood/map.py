@@ -5,6 +5,7 @@ from operator import attrgetter
 
 from commands import CommandObject
 
+
 class Edge:
     """
         An edge of a graph
@@ -78,6 +79,15 @@ class Edge:
     def set_opposite_name(self, origin, newname):
         self.set_name(self.to(origin), newname)
 
+class VirtualEdge:
+    def __init__(self, a):
+        assert a
+
+        self.a = a
+
+    def to(self, _):
+        return self.a
+
 class Room:
     """
         A node in the graph
@@ -88,6 +98,7 @@ class Room:
         self.roomid = -1
 
         self.exits = {}
+        self.virtual_exits = set()
         self.x, self.y = 0, 0
         self.mark = 0
         self.comp = 0
@@ -99,6 +110,14 @@ class Room:
     def compid(self):
         return (self.mark, self.comp)
 
+    def iter_exits(self, virtual=True):
+        for e in self.exits:
+            yield (e, self.exits[e])
+
+        for v in self.virtual_exits:
+            for e in v.exits:
+                yield (e, VirtualEdge(v.exits[e].to(v)))
+
     def add_exit(self, room, name):
         """
             Connect two rooms in both directions, thus keeping the graph undirected.
@@ -108,9 +127,14 @@ class Room:
         """
         Edge(self, name, room)
 
-    def get_exit(self, name):
+    def get_exit(self, name, virtual=True):
         if name in self.exits:
             return self.exits[name]
+
+        for v in self.virtual_exits:
+            if name in v.exits:
+                return VirtualEdge(v.exits[name].to(v))
+
         return None
 
     def remove_exit(self, name):
@@ -125,7 +149,7 @@ class Room:
         visited = set(visited)
         visited.add(self)
 
-        for e in self.exits.itervalues():
+        for _,e in self.iter_exits():
             if e.to(self) in visited:
                 continue
             visited |= e.to(self).dfs(visited)
@@ -203,8 +227,9 @@ class Mapper(CommandObject):
 
         self.last_cycle = None
 
-        if direction in self.map.current_room.exits:
-            self.map.current_room = self.map.current_room.exits[direction].to(self.map.current_room)
+        e = self.map.current_room.get_exit(direction)
+        if e:
+            self.map.current_room = e.to(self.map.current_room)
             self.move_stack.append((self.map.current_room, direction, 0))
         else:
             if self.mode not in ['auto', 'catchall']:
@@ -514,6 +539,31 @@ class Mapper(CommandObject):
             del self.map.rooms[r.roomid]
 
         return "Pruned %d rooms." % len(v)
+
+    def cmd_addvirtual(self, *args):
+        target = self.find_room(" ".join(args))
+        if not target:
+            return "Room not found."
+
+        self.map.current_room.virtual_exits.add(target)
+        return "Virtual exit added."
+
+    def cmd_rmvirtual(self, *args):
+        target = self.find_room(" ".join(args))
+        if not target:
+            return "Room not found"
+        if target not in self.map.current_room.virtual_exits:
+            return "No virtual exit to remove."
+
+        self.map.current_room.virtual_exits.remove(target)
+        return "Virtual exit removed."
+
+    def cmd_addroom(self):
+        r = Room(self.mud)
+        self.map.add(r)
+        self.map.current_room = r
+
+        return "You are now in room #%d." % r.roomid
     
 class Map:
     """
@@ -826,11 +876,17 @@ class MapPickler:
             file.write("%d %s\n" % (r.roomid, r.tag))
         file.write("\n")
         edges = set()
+        vedges = []
         for r in map.rooms.itervalues():
             for e in r.exits.itervalues():
                 edges.add(e)
+            for v in r.virtual_exits:
+                vedges.append((r.roomid, v.roomid))
         for e in edges:
             file.write("%d|%s|%d|%s|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0)))
+        file.write("\n")
+        for v in vedges:
+            file.write("%d %d\n" % (v[0], v[1]))
 
     def load(self, mud, file):
         def readint():
@@ -846,6 +902,8 @@ class MapPickler:
             map.name = readln()
             map.nextid = readint()
             map.current_room = readint()
+
+            # Rooms
             l = file.readline()
             while l != "\n":
                 l = l.strip().split(" ")
@@ -854,12 +912,22 @@ class MapPickler:
                 room.tag = " ".join(l[1:])
                 map.rooms[room.roomid] = room
                 l = file.readline()
+
+            # Edges
             l = file.readline()
-            while l != "":
+            while l != "" and l != "\n":
                 l = l.strip().split("|")
                 edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
                 edge.split = (l[4] == "1")
                 l = file.readline()
+
+            # Virtual Edges
+            l = file.readline()
+            while l != "":
+                l = l.strip().split(" ")
+                map.rooms[int(l[0])].virtual_exits.add(map.rooms[int(l[1])])
+                l = file.readline()
+
             map.current_room = map.rooms[map.current_room]
         except:
             raise self.BadFileException("Malformed map file")
