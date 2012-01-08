@@ -377,11 +377,12 @@ class Mapper(CommandObject):
         return "Changed way back to: " + " ".join(args)
 
     def cmd_rmexit(self, *args):
-        if args == []:
+        e = " ".join(args)
+        if e == "":
             return "Which exit?"
 
-        if args[0] in self.map.current_room.exits:
-            self.map.current_room.exits[args[0]].set_name(self.map.current_room, "")
+        if e in self.map.current_room.exits:
+            self.map.current_room.exits[e].set_name(self.map.current_room, "")
             return "Ok."
         else:
             return "No such exit."
