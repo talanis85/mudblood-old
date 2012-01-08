@@ -440,13 +440,17 @@ class StatusWidget(urwid.WidgetWrap):
     def __init__(self):
         self.w_main_status = urwid.Edit();
         self.w_right_status = urwid.Text("", align="right")
-        self.w_middle_status = urwid.Text("", align="right")
+        self.w_middle_status = urwid.Text("", align="center")
 
-        self.columns = urwid.Columns(
-            [urwid.AttrMap(self.w_main_status, 'user_input'), self.w_middle_status, self.w_right_status]
-            )
+        self.pile = urwid.Pile([
+            urwid.Columns([
+                urwid.AttrMap(self.w_main_status, 'user_input'),
+                self.w_right_status
+            ]),
+            self.w_middle_status
+        ])
 
-        urwid.WidgetWrap.__init__(self, self.columns)
+        urwid.WidgetWrap.__init__(self, self.pile)
 
     def keypress(self, size, key):
         if key == "enter":
