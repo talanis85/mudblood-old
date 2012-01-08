@@ -922,6 +922,8 @@ class MapPickler:
             while l != "" and l != "\n":
                 l = l.strip().split("|")
                 edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
+                if l[3] == "":
+                    edge.set_name(map.rooms[int(l[2])], "")
                 edge.split = (l[4] == "1")
                 l = file.readline()
 
