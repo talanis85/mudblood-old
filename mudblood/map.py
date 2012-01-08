@@ -285,17 +285,18 @@ class Mapper(CommandObject):
         from heapq import heappush,heappop
 
         self.map.current_room.shortest_path = []
+        self.map.distance = 0
         pq = [(0, self.map.current_room)]
         mark = time.time()
 
         while len(pq) > 0:
             curdist, curroom = heappop(pq)
             curroom.mark = mark
-            curroom.distance = curdist
             for name,e in curroom.iter_exits():
                 if e.to(curroom).mark != mark or e.to(curroom).distance > curdist + 1:
                     e.to(curroom).mark = mark
                     e.to(curroom).shortest_path = curroom.shortest_path + [name]
+                    e.to(curroom).distance = curdist + 1
                     heappush(pq, (curdist + 1, e.to(curroom)))
 
         if target.mark == mark:
