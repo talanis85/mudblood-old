@@ -611,7 +611,10 @@ class Map:
         r = None
         if type(room) == str or type(room) == unicode:
             if room[0] == "#":
-                r = self.rooms[int(room[1:])]
+                try:
+                    r = self.rooms[int(room[1:])]
+                except ValueError:
+                    return None
             else:
                 for ro in self.rooms.itervalues():
                     if ro.tag == room:
