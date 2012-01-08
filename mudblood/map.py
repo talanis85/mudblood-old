@@ -207,7 +207,7 @@ class Mapper(CommandObject):
         if l == "" or self.mode == "off":
             return
 
-        if l in self.map.current_room.exits or self.mode == "catchall":
+        if self.map.current_room.get_exit(l) or self.mode == "catchall":
             return self.go_to(l)
         else:
             d = self.mud.Direction.canonical(l)
