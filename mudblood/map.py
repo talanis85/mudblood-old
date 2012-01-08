@@ -292,7 +292,7 @@ class Mapper(CommandObject):
             curdist, curroom = heappop(pq)
             curroom.mark = mark
             curroom.distance = curdist
-            for name,e in curroom.exits.iteritems():
+            for name,e in curroom.iter_exits():
                 if e.to(curroom).mark != mark or e.to(curroom).distance > curdist + 1:
                     e.to(curroom).mark = mark
                     e.to(curroom).shortest_path = curroom.shortest_path + [name]
