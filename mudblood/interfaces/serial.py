@@ -41,8 +41,8 @@ class Interface(CommandObject):
         self.command_chain = CommandChain()
 
         if self.session():
-            self.command_chain.chain = [self, self.session(), self.session().mapper]
             self.session().connect()
+            self.command_chain.chain = [self.session().mud, self, self.session(), self.session().mapper]
         else:
             self.command_chain.chain = [self]
 
