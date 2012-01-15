@@ -11,14 +11,13 @@ from commands import CommandObject
 
 from hook import Hook
 from map import Mapper, MapNotification
-from mud_base import Mud
 
 def load_mud_definition(path):
     import os
-    mud = Mud()
+    mud = __import__("mudblood.mud_base").mud_base
     if os.path.exists(path):
-        mud.self = mud
-        execfile(path, {"Mud": Mud, "this": mud}, mud.__dict__)
+        mud.this = mud
+        execfile(path, mud.__dict__)
         mud.path = path
         return mud
     else:
