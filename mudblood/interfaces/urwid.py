@@ -498,5 +498,9 @@ class MapWidget(urwid.WidgetWrap):
 
     def update_map(self):
         if self.mapper.map.current_room:
-            self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + str(self.mapper.map.current_room))
+            exits = ""
+            for e in self.mapper.map.current_room.exits:
+                exits += e.upper() + "     "
+
+            self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + exits)
             self._invalidate()
