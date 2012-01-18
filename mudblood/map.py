@@ -22,6 +22,7 @@ class Edge:
 
         self.a, self.a_name, self.b, self.b_name = a, a_name, b, b_name
         self.split = False
+        self.nowalk = False
 
         a.exits[a_name] = self
         b.exits[b_name] = self
@@ -84,6 +85,9 @@ class VirtualEdge:
         assert a
 
         self.a = a
+
+        self.split = False
+        self.nowalk = False
 
     def to(self, _):
         return self.a
@@ -293,6 +297,8 @@ class Mapper(CommandObject):
             curdist, curroom = heappop(pq)
             curroom.mark = mark
             for name,e in curroom.iter_exits():
+                if e.nowalk:
+                    continue
                 if e.to(curroom).mark != mark or e.to(curroom).distance > curdist + 1:
                     e.to(curroom).mark = mark
                     e.to(curroom).shortest_path = curroom.shortest_path + [name]
@@ -888,7 +894,7 @@ class MapPickler:
             for v in r.virtual_exits:
                 vedges.append((r.roomid, v.roomid))
         for e in edges:
-            file.write("%d|%s|%d|%s|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0)))
+            file.write("%d|%s|%d|%s|%d|%d\n" % (e.a.roomid, e.a_name, e.b.roomid, e.b_name, (e.split and 1 or 0), (e.nowalk and 1 or 0)))
         file.write("\n")
         for v in vedges:
             file.write("%d %d\n" % (v[0], v[1]))
@@ -925,6 +931,11 @@ class MapPickler:
                 edge = Edge(map.rooms[int(l[0])], l[1], map.rooms[int(l[2])], l[3])
                 if l[3] == "":
                     edge.set_name(map.rooms[int(l[2])], "")
+
+                # TODO: remove the if after migration
+                if len(l) > 5:
+                    edge.nowalk = (l[5] == "1")
+
                 edge.split = (l[4] == "1")
                 l = file.readline()
 
