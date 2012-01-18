@@ -181,11 +181,11 @@ class Interface(CommandObject):
     def set_status(self, msg):
         self.w_status.set_left(msg)
 
-    def start_overlay(self, widget):
+    def start_overlay(self, widget, halign='center', hsize=('relative',80), valign='middle', vsize=('relative',80)):
         self.w_overlay = DynamicOverlay(urwid.LineBox(widget),
                                         self.w_session,
-                                        'center', ('relative', 80),
-                                        'middle', ('relative', 80))
+                                        halign, hsize,
+                                        valign, vsize)
         self.w_frame.set_body(self.w_overlay)
         self.current_overlay = widget
 
@@ -232,7 +232,7 @@ class Interface(CommandObject):
         if self.current_overlay == self.w_map:
             self.end_overlay()
         else:
-            self.start_overlay(self.w_map)
+            self.start_overlay(self.w_map, 'top', ('relative',60), 'middle', ('relative',100))
             self.w_map.update_map()
         return "Ok."
 
