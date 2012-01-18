@@ -9,7 +9,6 @@ from collections import deque
 
 from commands import CommandObject
 
-from hook import Hook
 from map import Mapper, MapNotification
 
 def load_mud_definition(path):
@@ -75,6 +74,13 @@ class Event:
     CLOSED      = 5
     STATUS      = 6
     MAP         = 7
+
+class Hook:
+    def __init__(self):
+        pass
+
+    def process(self, session, line):
+        return line
 
 class Session(CommandObject):
     """

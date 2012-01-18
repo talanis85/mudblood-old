@@ -3,7 +3,7 @@
 #
 # MUD definition base module. Must be imported by MUD definitions.
 
-import hook
+from mdflib import hooks
 
 def pass_command(cmd):
     if hasattr(this, "cmd_" + cmd[0]):
@@ -91,7 +91,7 @@ def cmd_toggle_map_mode():
 def cmd_addtrigger(*args):
     (t, m, r) = " ".join(args).partition(" -> ")
     if m:
-        triggers.add(hook.Trigger(t, r))
+        triggers.add(hooks.Trigger(t, r))
         return "Added Trigger: '%s' Response: '%s'" % (t, r)
     else:
         return "Syntax Error"
@@ -135,7 +135,7 @@ strings = {
     'command_not_found': "Hae?",
     }
 
-triggers = hook.TriggerList()
+triggers = hooks.TriggerList()
 
 input_hooks = [triggers]
 output_hooks = []
