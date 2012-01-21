@@ -134,7 +134,7 @@ class Interface(CommandObject):
                 self.end_overlay()
                 self.w_status.stop_edit()
                 self.w_frame.set_focus('body')
-            elif k == options.prefix and self.w_frame.focus_part != 'footer':
+            elif k == options.prefix and self.w_session.input.get_edit_text() == "" and self.w_frame.focus_part != 'footer':
                 self.w_status.start_edit()
                 self.w_frame.set_focus('footer')
             elif k in self.mud.keys:
