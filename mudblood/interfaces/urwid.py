@@ -232,7 +232,7 @@ class Interface(CommandObject):
         if self.current_overlay == self.w_map:
             self.end_overlay()
         else:
-            self.start_overlay(self.w_map, 'top', ('relative',60), 'middle', ('relative',100))
+            self.start_overlay(self.w_map, 'center', ('relative',100), 'top', ('relative',60))
             self.w_map.update_map()
         return "Ok."
 
