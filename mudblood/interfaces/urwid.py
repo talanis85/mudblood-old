@@ -79,6 +79,8 @@ class Interface(CommandObject):
 
         self.w_frame = urwid.Frame(self.w_session, None, self.w_status)
 
+        self.current_overlay = None
+
         # TODO: Make user_input, info and error customizable
         palette = [
                 ('default', 'default', 'default'),
@@ -134,7 +136,7 @@ class Interface(CommandObject):
                 self.end_overlay()
                 self.w_status.stop_edit()
                 self.w_frame.set_focus('body')
-            elif k == options.prefix and self.w_frame.focus_part != 'footer':
+            elif k == options.prefix and self.w_session.input.get_edit_text() == "" and self.w_frame.focus_part != 'footer':
                 self.w_status.start_edit()
                 self.w_frame.set_focus('footer')
             elif k in self.mud.keys:
@@ -181,11 +183,11 @@ class Interface(CommandObject):
     def set_status(self, msg):
         self.w_status.set_left(msg)
 
-    def start_overlay(self, widget):
+    def start_overlay(self, widget, halign='center', hsize=('relative',80), valign='middle', vsize=('relative',80)):
         self.w_overlay = DynamicOverlay(urwid.LineBox(widget),
                                         self.w_session,
-                                        'center', ('relative', 80),
-                                        'middle', ('relative', 80))
+                                        halign, hsize,
+                                        valign, vsize)
         self.w_frame.set_body(self.w_overlay)
         self.current_overlay = widget
 
@@ -232,7 +234,7 @@ class Interface(CommandObject):
         if self.current_overlay == self.w_map:
             self.end_overlay()
         else:
-            self.start_overlay(self.w_map)
+            self.start_overlay(self.w_map, 'center', ('relative',100), 'top', ('relative',60))
             self.w_map.update_map()
         return "Ok."
 
@@ -344,6 +346,9 @@ class SessionWidget(urwid.BoxWidget):
             self.history.append(t)
             self.history_pos = 0
             self.session.stdin.writeln(t)
+            global master
+            if isinstance(master.current_overlay, MapWidget):
+                master.current_overlay.update_map()
         elif key == 'tab':
             if self.completer:
                 if self.completer_state == 0:
@@ -484,19 +489,54 @@ class StatusWidget(urwid.WidgetWrap):
 
 
 
-class MapWidget(urwid.WidgetWrap):
+class MapWidget(urwid.BoxWidget):
     def __init__(self, mapper):
         self.mapper = mapper
-        self.text = urwid.Text("", align='center')
-
-        self.mode = ""
-        self.direction_buf = ""
-        
-        urwid.WidgetWrap.__init__(self, urwid.Filler(self.text))
+        self.mapbuf = []
+        self.curx = 0
+        self.cury = 0
+        self.maptextbuf = ""
 
         self.update_map()
 
+        urwid.BoxWidget.__init__(self)
+
+    def render(self, size, focus=False):
+        self.update_map()
+
+        c = urwid.CompositeCanvas(urwid.SolidCanvas(" ", size[0], size[1]))
+
+        (rw, rh) = size
+        rh -= 10
+        rw -= 10
+
+        minx = max([0, self.curx - rw / 2])
+        maxx = min([minx + rw, len(self.mapbuf[0])])
+        miny = max([0, self.cury - rh / 2])
+        maxy = min([miny + rh, len(self.mapbuf)])
+
+        if rw > maxx - minx:
+            padleft = (rw - (maxx - minx)) / 2
+        else:
+            padleft = 0
+
+        mapcanvas = urwid.Filler(
+                        urwid.Text("h=%d w=%d x=%d,%d,%d y=%d,%d,%d\n" % (rh,rw,self.curx,minx,maxx,self.cury,miny,maxy) + "\n".join([" "*padleft+x[minx:maxx] for x in self.mapbuf[miny:maxy]]))
+                    ).render(size, focus)
+        c.overlay(mapcanvas, 0, 0)
+
+        return c
+
+    def keypress(self, size, key):
+        return key
+
     def update_map(self):
+        (self.mapbuf, self.curx, self.cury) = self.mapper.map.render(True)
+
         if self.mapper.map.current_room:
-            self.text.set_text("\n".join(self.mapper.map.render(True)) + "\n" + str(self.mapper.map.current_room))
-            self._invalidate()
+            exits = ""
+            for e in self.mapper.map.current_room.exits:
+                exits += e.upper() + "     "
+
+            self.maptextbuf = exits
+        self._invalidate()

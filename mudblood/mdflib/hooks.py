@@ -1,11 +1,5 @@
 import re
-
-class Hook:
-    def __init__(self):
-        pass
-
-    def process(self, session, line):
-        return line
+from mudblood.session import Hook
 
 class StreamHook(Hook):
     def __init__(self, condition, stream):

@@ -656,7 +656,7 @@ class Map:
         return (comp, mark)
 
 
-    def render(self, only_current=False, rw=0, rh=0):
+    def render(self, only_current=False):
         """
             Render the map to ASCII.
 
@@ -864,16 +864,9 @@ class Map:
             allret.extend([str(l) for l in ret])
             allret.append("")
 
-        if rw > 0 and rh > 0:
-            minx = max(0, self.map.current_room.x - rw / 2)
-            maxx = min(minx + rw, len(allret[0]))
-            miny = max(0, self.map.current_room.y - rh / 2)
-            maxy = min(miny + rh, len(allret))
-            allret = [x[minx:maxx] for x in allret[miny:maxy]]
-
         self.lock.release()
 
-        return allret
+        return (allret, self.current_room.x*3, self.current_room.y*3)
 
 class MapPickler:
     class BadFileException(Exception):
