@@ -494,6 +494,16 @@ class Mapper(CommandObject):
         self.map.update_coords(True)
         return "Ok."
     
+    def cmd_nowalk(self):
+        r,d = self.move_stack[-2][0], self.move_stack[-1][1]
+
+        r.exits[d].nowalk = not r.exits[d].nowalk
+        self.map.update_coords(True)
+        if r.exits[d].nowalk:
+            return "Wayfinder will not pass the edge."
+        else:
+            return "Wayfinder will pass the edge."
+
     def cmd_merge(self, *args):
         """Merge this map with another map.
            Arguments: Name of other map
