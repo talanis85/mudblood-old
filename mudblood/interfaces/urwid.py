@@ -535,7 +535,7 @@ class MapWidget(urwid.BoxWidget):
 
         if self.mapper.map.current_room:
             exits = ""
-            for e in self.mapper.map.current_room.exits:
+            for e in self.mapper.map.current_room.exits.keys():
                 exits += e.upper() + "     "
 
             self.maptextbuf = exits
